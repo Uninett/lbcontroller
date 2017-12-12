@@ -11,164 +11,187 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Note: the example only works with the code within the same release/branch.
+// https://engineering.bitnami.com/articles/kubewatch-an-example-of-kubernetes-custom-controller.html
 package main
 
 import (
+	"flag"
 	"fmt"
 	"time"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
+// max retries for a queued object
+var maxRetries = 3
+
 func main() {
+	flag.Parse()
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
 	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
+	// creates the clientset
+	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(err.Error())
+		glog.Fatal(err)
 	}
-	for {
-		services, err := clientset.CoreV1().Services("").List(metav1.ListOptions{})
-		if err != nil {
-			panic(err.Error())
-		}
-		fmt.Printf("There are %d services in the cluster\n", len(services.Items))
 
-		// Examples for error handling:
-		// - Use helper functions like e.g. errors.IsNotFound()
-		// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-		_, err = clientset.CoreV1().Pods("default").Get("example-xxxxx", metav1.GetOptions{})
-		if errors.IsNotFound(err) {
-			fmt.Printf("Pod not found\n")
-		} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-			fmt.Printf("Error getting pod %v\n", statusError.ErrStatus.Message)
-		} else if err != nil {
-			panic(err.Error())
-		} else {
-			fmt.Printf("Found pod\n")
-		}
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-		time.Sleep(10 * time.Second)
+	informer := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+				return client.CoreV1().Pods(meta_v1.NamespaceAll).List(options)
+			},
+			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
+				return client.CoreV1().Pods(meta_v1.NamespaceAll).Watch(options)
+			},
+		},
+		&v1.Pod{},
+		0, //Skip resync
+		cache.Indexers{},
+	)
+
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		UpdateFunc: func(old, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+	})
+
+	controller := &Controller{
+		clientset: client,
+		informer:  informer,
+		queue:     queue,
 	}
+
+	stop := make(chan struct{})
+	defer close(stop)
+	go controller.Run(stop)
+
+	// Wait forever
+	select {}
+
 }
 
+// Controller object
 type Controller struct {
-	indexer  cache.Indexer
-	queue    workqueue.RateLimitingInterface
-	informer cache.Controller
+	clientset kubernetes.Interface
+	queue     workqueue.RateLimitingInterface
+	informer  cache.SharedIndexInformer
+	//eventHandler handlers.Handler
 }
 
-func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller) *Controller {
-	return &Controller{
-		informer: informer,
-		indexer:  indexer,
-		queue:    queue,
+// Run will start the controller.
+// StopCh channel is used to send interrupt signal to stop it.
+func (c *Controller) Run(stopCh <-chan struct{}) {
+	// don't let panics crash the process
+	defer utilruntime.HandleCrash()
+	// make sure the work queue is shutdown which will trigger workers to end
+	defer c.queue.ShutDown()
+
+	glog.Info("Starting kubewatch controller")
+
+	go c.informer.Run(stopCh)
+
+	// wait for the caches to synchronize before starting the worker
+	if !cache.WaitForCacheSync(stopCh, c.HasSynced) {
+		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+		return
+	}
+
+	glog.Info("Kubewatch controller synced and ready")
+
+	// runWorker will loop until "something bad" happens.  The .Until will
+	// then rekick the worker after one second
+	wait.Until(c.runWorker, time.Second, stopCh)
+}
+
+// HasSynced is required for the cache.Controller interface.
+func (c *Controller) HasSynced() bool {
+	return c.informer.HasSynced()
+}
+func (c *Controller) runWorker() {
+	// processNextWorkItem will automatically wait until there's work available
+	for c.processNextItem() {
+		// continue looping
 	}
 }
 
+// processNextWorkItem deals with one key off the queue.  It returns false
+// when it's time to quit.
 func (c *Controller) processNextItem() bool {
-	// Wait until there is a new item in the working queue
+	// pull the next work item from queue.  It should be a key we use to lookup
+	// something in a cache
 	key, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	// Tell the queue that we are done with processing this key. This unblocks the key for other workers
-	// This allows safe parallel processing because two pods with the same key are never processed in
-	// parallel.
+
+	// you always have to indicate to the queue that you've completed a piece of
+	// work
 	defer c.queue.Done(key)
 
-	// Invoke the method containing the business logic
-	err := c.syncToStdout(key.(string))
-	// Handle the error if something went wrong during the execution of the business logic
-	c.handleErr(err, key)
+	// do your work on the key.
+	err := c.processItem(key.(string))
+
+	if err == nil {
+		// No error, tell the queue to stop tracking history
+		c.queue.Forget(key)
+	} else if c.queue.NumRequeues(key) < maxRetries {
+		glog.Errorf("Error processing %s (will retry): %v", key, err)
+		// requeue the item to work on later
+		c.queue.AddRateLimited(key)
+	} else {
+		// err != nil and too many retries
+		glog.Errorf("Error processing %s (giving up): %v", key, err)
+		c.queue.Forget(key)
+		utilruntime.HandleError(err)
+	}
+
 	return true
 }
 
-// syncToStdout is the business logic of the controller. In this controller it simply prints
-// information about the pod to stdout. In case an error happened, it has to simply return the error.
-// The retry logic should not be part of the business logic.
-func (c *Controller) syncToStdout(key string) error {
-	obj, exists, err := c.indexer.GetByKey(key)
+func (c *Controller) processItem(key string) error {
+	glog.Infof("Processing change to Pod %s", key)
+
+	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
 	if err != nil {
-		glog.Errorf("Fetching object with key %s from store failed with %v", key, err)
-		return err
+		return fmt.Errorf("Error fetching object with key %s from store: %v", key, err)
 	}
 
 	if !exists {
-		// Below we will warm up our cache with a Pod, so that we will see a delete for one pod
-		fmt.Printf("Pod %s does not exist anymore\n", key)
-	} else {
-		// Note that you also have to check the uid if you have a local controlled resource, which
-		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
-		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
+		fmt.Printf("deleted pod %s\n", obj.(*v1.Pod).GetName())
+		return nil
 	}
+
+	fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
 	return nil
-}
-
-// handleErr checks if an error happened and makes sure we will retry later.
-func (c *Controller) handleErr(err error, key interface{}) {
-	if err == nil {
-		// Forget about the #AddRateLimited history of the key on every successful synchronization.
-		// This ensures that future processing of updates for this key is not delayed because of
-		// an outdated error history.
-		c.queue.Forget(key)
-		return
-	}
-
-	// This controller retries 5 times if something goes wrong. After that, it stops trying.
-	if c.queue.NumRequeues(key) < 5 {
-		glog.Infof("Error syncing pod %v: %v", key, err)
-
-		// Re-enqueue the key rate limited. Based on the rate limiter on the
-		// queue and the re-enqueue history, the key will be processed later again.
-		c.queue.AddRateLimited(key)
-		return
-	}
-
-	c.queue.Forget(key)
-	// Report to an external entity that, even after several retries, we could not successfully process this key
-	runtime.HandleError(err)
-	glog.Infof("Dropping pod %q out of the queue: %v", key, err)
-}
-
-func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
-	defer runtime.HandleCrash()
-
-	// Let the workers stop when we are done
-	defer c.queue.ShutDown()
-	glog.Info("Starting Pod controller")
-
-	go c.informer.Run(stopCh)
-
-	// Wait for all involved caches to be synced, before processing items from the queue is started
-	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
-		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
-		return
-	}
-
-	for i := 0; i < threadiness; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
-	}
-
-	<-stopCh
-	glog.Info("Stopping Pod controller")
-}
-
-func (c *Controller) runWorker() {
-	for c.processNextItem() {
-	}
 }
