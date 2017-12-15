@@ -5,16 +5,23 @@ import (
 	"time"
 )
 
-//Frontend represent a frontend object fore the load balancers
+//Frontend represent a frontend object for the load balancers
+//{
+//	"type": "frontend"
+//	"metadata": ...
+//	"config": {
+//		 "addresses": ["10.40.50.23","2001:700:fffd::23"]
+//	}
+//}
 type Frontend struct {
-	Metadata Metadata
+	Metadata Metadata `json:"metadata,omitempty"`
 	//Config is the configuration of the frontend
-	Config FrontendConfig
+	Config FrontendConfig `json:"config,omitempty"`
 }
 
 //FrontendConfig is the configuration of a Frontend object
 type FrontendConfig struct {
-	Addresses []net.IP
+	Addresses []net.IP `json:"addresses,omitempty"`
 }
 
 // TCPConfig represent the configuration of a TCP load balanced service
@@ -55,9 +62,9 @@ type Backend struct {
 
 // HealthCheck is a loadbalancer heath check
 type HealthCheck struct {
-	Port   uint16
-	Send   string
-	Expect string
+	Port   uint16 `json:"port,omitempty"`
+	Send   string `json:"send,omitempty"`
+	Expect string `json:"expect,omitempty"`
 }
 
 //Metadata of messages sent to the API
@@ -68,7 +75,7 @@ type HealthCheck struct {
 //	...
 //}
 type Metadata struct {
-	Name      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Name      string    `json:"name,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
