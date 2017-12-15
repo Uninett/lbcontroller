@@ -5,6 +5,7 @@ metadata:
     app: service-test
   name: service-test
 spec:
+  type: LoadBalancer
   ports:
   - port: 80
     targetPort: 80
