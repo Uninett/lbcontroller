@@ -54,13 +54,13 @@ func main() {
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return client.CoreV1().Pods(meta_v1.NamespaceAll).List(options)
+				return client.CoreV1().Services(meta_v1.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return client.CoreV1().Pods(meta_v1.NamespaceAll).Watch(options)
+				return client.CoreV1().Services(meta_v1.NamespaceAll).Watch(options)
 			},
 		},
-		&v1.Pod{},
+		&v1.Service{},
 		0, //Skip resync
 		cache.Indexers{},
 	)
@@ -117,7 +117,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	// make sure the work queue is shutdown which will trigger workers to end
 	defer c.queue.ShutDown()
 
-	glog.Info("Starting kubewatch controller")
+	glog.Info("Starting l4lb controller")
 
 	go c.informer.Run(stopCh)
 
@@ -127,7 +127,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	glog.Info("Kubewatch controller synced and ready")
+	glog.Info("l4lb controller synced and ready")
 
 	// runWorker will loop until "something bad" happens.  The .Until will
 	// then rekick the worker after one second
@@ -180,7 +180,7 @@ func (c *Controller) processNextItem() bool {
 }
 
 func (c *Controller) processItem(key string) error {
-	glog.Infof("Processing change to Pod %s", key)
+	glog.Infof("Processing change to Service %s", key)
 
 	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
 	if err != nil {
@@ -188,10 +188,16 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	if !exists {
-		fmt.Printf("deleted pod %s\n", obj.(*v1.Pod).GetName())
+		//fmt.Printf("Deleted Service %s\n", obj.(*v1.Service).GetName())
+		//obj is nil
+		glog.Infof("Deleted Service with key %s\n", key)
 		return nil
 	}
 
-	fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
+	svc := obj.(*v1.Service)
+	glog.Infof("Sync/Add/Update for Service %s\n", svc.GetName())
+	fmt.Println("service type: ", svc.Spec.Type)
+	fmt.Println("service status: ", svc.Status)
+
 	return nil
 }
