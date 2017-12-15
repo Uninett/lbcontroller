@@ -1,11 +1,12 @@
 package nlb
 
 import (
+	"encoding/json"
 	"net"
 	"time"
 )
 
-//Frontend represent a frontend object for the load balancers
+//Message from/to the API endpoint, e.g.
 //{
 //	"type": "frontend"
 //	"metadata": ...
@@ -13,18 +14,39 @@ import (
 //		 "addresses": ["10.40.50.23","2001:700:fffd::23"]
 //	}
 //}
-type Frontend struct {
-	Metadata Metadata `json:"metadata,omitempty"`
-	//Config is the configuration of the frontend
-	Config FrontendConfig `json:"config,omitempty"`
+//different types comes with different configurations.
+type Message struct {
+	Type     string          `json:"type,omitempty"`
+	Metadata Metadata        `json:"metadata,omitempty"`
+	Config   json.RawMessage `json:"config,omitempty"`
+}
+
+//Metadata of messages sent to the API
+//"metadata": {
+//	"name": "testservice",
+//	"created_at": "......",
+//	"updated_at": "......",
+//	...
+//}
+type Metadata struct {
+	Name      string    `json:"name,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 //FrontendConfig is the configuration of a Frontend object
+//{
+//	"type": "frontend"
+//	"metadata": ...
+//	"config": {
+//		 "addresses": ["10.40.50.23","2001:700:fffd::23"]
+//	}
+//}
 type FrontendConfig struct {
 	Addresses []net.IP `json:"addresses,omitempty"`
 }
 
-// TCPConfig represent the configuration of a TCP load balanced service
+// TCPConfig represent the configuration of a TCP load balanced service, e.g.:
 // "config": {
 // 	"method": "least_conn",
 // 	"ports": [80, 443],
@@ -46,13 +68,13 @@ type FrontendConfig struct {
 // 	"frontend": "foobar"
 // }
 type TCPConfig struct {
-	Method           *string            `json:"method,omitempty"`
+	Method           string             `json:"method,omitempty"`
 	Ports            []uint16           `json:"ports,omitempty"`
 	Backends         map[string]Backend `json:"backends,omitempty"`
-	UpstreamMaxConns *int               `json:"upstream_max_conns,omitempty"`
+	UpstreamMaxConns int                `json:"upstream_max_conns,omitempty"`
 	ACL              []net.IPNet        `json:"acl,omitempty"`
-	HealthCheck      *HealthCheck       `json:"health_check,omitempty"`
-	Frontend         *Frontend          `json:"frontend,omitempty"`
+	HealthCheck      HealthCheck        `json:"health_check,omitempty"`
+	Frontend         string             `json:"frontend,omitempty"`
 }
 
 // Backend represents a backend in the loadbalancer configuration
@@ -67,15 +89,40 @@ type HealthCheck struct {
 	Expect string `json:"expect,omitempty"`
 }
 
-//Metadata of messages sent to the API
-//"metadata": {
-//	"name": "testservice",
-//	"created_at": "......",
-//	"updated_at": "......",
-//	...
+//SharedHTTPConfig represents the configuration of a TCP load balanced service, e.g.:
+//"config": {
+//	"names": ["site-a.example.com", "site-b.foo.org"],
+//	"sticky_backends": false,
+//	"backend_protocols": "both",
+//	"http": {
+//		"redirect_https": true,
+//		"backend_port": 8080,
+//		"health_check": {
+//			"uri": "/",
+//			 "status_code": 301
+//		}
+//	},
+//	"https": {
+//		 "private_key": "........",
+//		 "certificate": "........",
+//		 "backend_port": 8888,
+//		 "health_check": {
+//			 "uri": "/healthz",
+//			 "status_code": 200,
+//			 "body": "OK"
+//			}
+//	},
+//	"backends": [
+//		 "hostname1.example.com": {
+//			 "addrs": ["10.3.2.1", "2001:700:f00d::4"]
+//		 }
+//	]
 //}
-type Metadata struct {
-	Name      string    `json:"name,omitempty"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+type SharedHTTPConfig struct {
+	Names            []string
+	StickyBackends   bool
+	BackendProtocols string
+	HTTP             json.RawMessage
+	HTTPS            json.RawMessage
+	Backends         []Backend
 }
