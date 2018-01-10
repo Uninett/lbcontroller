@@ -1,10 +1,16 @@
 package nlb
 
 import (
-	"encoding/json"
+	"bytes"
 	"net"
+	"net/http"
 	"time"
+
+	"github.com/koki/json"
+	"github.com/pkg/errors"
 )
+
+const jsonContent = "application/json"
 
 //Message from/to the API endpoint, e.g.
 //{
@@ -15,6 +21,8 @@ import (
 //	}
 //}
 //different types comes with different configurations.
+//The Config field should be unmarshalled after a Message is
+//in this way the type is known
 type Message struct {
 	Type     string          `json:"type,omitempty"`
 	Metadata Metadata        `json:"metadata,omitempty"`
@@ -44,6 +52,13 @@ type Metadata struct {
 //}
 type FrontendConfig struct {
 	Addresses []net.IP `json:"addresses,omitempty"`
+}
+
+//Frontent type for the load balancers
+type Frontend struct {
+	Type     string         `json:"type,omitempty"`
+	Metadata Metadata       `json:"metadata,omitempty"`
+	Config   FrontendConfig `json:"config,omitempty"`
 }
 
 // TCPConfig represent the configuration of a TCP load balanced service, e.g.:
@@ -89,6 +104,7 @@ type HealthCheck struct {
 	Expect string `json:"expect,omitempty"`
 }
 
+//TODO (gta): finish the shared_http, they are not complete
 //SharedHTTPConfig represents the configuration of a TCP load balanced service, e.g.:
 //"config": {
 //	"names": ["site-a.example.com", "site-b.foo.org"],
@@ -126,3 +142,28 @@ type SharedHTTPConfig struct {
 	HTTPS            json.RawMessage
 	Backends         []Backend
 }
+
+//prepare the http request and marchal the object to send
+func prepareRequest(obj interface{}, url, method string) (*http.Request, error) {
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return nil, errors.Wrap(err, "error marshalling Frontend")
+	}
+	buf := bytes.NewBuffer(data)
+
+	req, err := http.NewRequest("PUT", url, buf)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+	req.Header.Set("Content-Type", jsonContent)
+	return req, nil
+}
+
+//type of action to discriminate the http request when editing an object
+type action int
+
+const (
+	replace action = iota
+	reconfig
+	delete
+)
