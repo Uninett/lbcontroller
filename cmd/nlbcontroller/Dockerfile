@@ -1,6 +1,6 @@
 FROM scratch
 
-COPY l4lb .
+COPY  nlbcontroller .
 
-ENTRYPOINT [ "/l4lb" ]
+ENTRYPOINT [ "/nlbcontroller" ]
 CMD ["-logtostderr=true"]
