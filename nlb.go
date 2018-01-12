@@ -24,7 +24,7 @@ const jsonContent = "application/json"
 //The Config field should be unmarshalled after a Message is
 //in this way the type is known
 type Message struct {
-	Type     string          `json:"type,omitempty"`
+	Type     ServiceType     `json:"type,omitempty"`
 	Metadata Metadata        `json:"metadata,omitempty"`
 	Config   json.RawMessage `json:"config,omitempty"`
 }
@@ -54,7 +54,7 @@ type FrontendConfig struct {
 	Addresses []net.IP `json:"addresses,omitempty"`
 }
 
-//Frontent type for the load balancers
+//Frontend type for the load balancers
 type Frontend struct {
 	Type     string         `json:"type,omitempty"`
 	Metadata Metadata       `json:"metadata,omitempty"`
@@ -83,13 +83,13 @@ type Frontend struct {
 // 	"frontend": "foobar"
 // }
 type TCPConfig struct {
-	Method           string      `json:"method,omitempty"`
-	Ports            []uint16    `json:"ports,omitempty"`
-	Backends         []Backend   `json:"backends,omitempty"`
-	UpstreamMaxConns int         `json:"upstream_max_conns,omitempty"`
-	ACL              []string    `json:"acl,omitempty"`
-	HealthCheck      HealthCheck `json:"health_check,omitempty"`
-	Frontend         string      `json:"frontend,omitempty"`
+	Method           string         `json:"method,omitempty"`
+	Ports            []uint16       `json:"ports,omitempty"`
+	Backends         []Backend      `json:"backends,omitempty"`
+	UpstreamMaxConns int            `json:"upstream_max_conns,omitempty"`
+	ACL              []string       `json:"acl,omitempty"`
+	HealthCheck      TCPHealthCheck `json:"health_check,omitempty"`
+	Frontend         string         `json:"frontend,omitempty"`
 }
 
 //Type imprments the ServiceConfig interface
@@ -103,11 +103,18 @@ type Backend struct {
 	Addrs []string `json:"addrs,omitempty"`
 }
 
-// HealthCheck is a loadbalancer heath check
-type HealthCheck struct {
+// TCPHealthCheck is a loadbalancer heath check for TCP services
+type TCPHealthCheck struct {
 	Port   uint16 `json:"port,omitempty"`
 	Send   string `json:"send,omitempty"`
 	Expect string `json:"expect,omitempty"`
+}
+
+// HTTPHealthCheck is a loadbalancer heath check for http services
+type HTTPHealthCheck struct {
+	URI        string `json:"uri,omitempty"`
+	StatusCode int    `json:"status_code,omitempty"`
+	Body       string `json:"body,omitempty"`
 }
 
 //SharedHTTPConfig represents the configuration of a TCP load balanced service, e.g.:
@@ -140,27 +147,27 @@ type HealthCheck struct {
 //	]
 //}
 type SharedHTTPConfig struct {
-	Names            []string           `json:"names,omitempty"`
-	StickyBackends   bool               `json:"sticky_backends,omitempty"`
-	BackendProtocols string             `json:"backend_protocols,omitempty"`
-	HTTP             HTTP               `json:"http,omitempty"`
-	HTTPS            HTTPS              `json:"https,omitempty"`
-	Backends         map[string]Backend `json:"backends,omitempty"`
+	Names            []string  `json:"names,omitempty"`
+	StickyBackends   bool      `json:"sticky_backends"`
+	BackendProtocols string    `json:"backend_protocols,omitempty"`
+	HTTP             HTTP      `json:"http,omitempty"`
+	HTTPS            HTTPS     `json:"https,omitempty"`
+	Backends         []Backend `json:"backends,omitempty"`
 }
 
 //HTTP is the HTTP part of a a SharedHTTPConfig
 type HTTP struct {
-	RedirectHTTPS bool        `json:"redirect_https,omitempty"`
-	BackendPort   int         `json:"backend_port,omitempty"`
-	HealthCheck   HealthCheck `json:"health_check,omitempty"`
+	RedirectHTTPS bool            `json:"redirect_https,omitempty"`
+	BackendPort   int             `json:"backend_port,omitempty"`
+	HealthCheck   HTTPHealthCheck `json:"health_check,omitempty"`
 }
 
 //HTTPS is the HTTPS part of a a SharedHTTPConfig
 type HTTPS struct {
-	PrivateKey  string      `json:"private_key,omitempty"`
-	Certificate string      `json:"certificate,omitempty"`
-	BackendPort int         `json:"backend_port,omitempty"`
-	HealthCheck HealthCheck `json:"health_check,omitempty"`
+	PrivateKey  string          `json:"private_key,omitempty"`
+	Certificate string          `json:"certificate,omitempty"`
+	BackendPort int             `json:"backend_port,omitempty"`
+	HealthCheck HTTPHealthCheck `json:"health_check,omitempty"`
 }
 
 //Type imprments the ServiceConfig interface

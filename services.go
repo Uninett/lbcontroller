@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Serviceconfig holds one of the different configurations
+// ServiceConfig holds one of the different configurations
 // of the services
 type ServiceConfig interface {
 	Type() ServiceType
@@ -17,7 +17,7 @@ type ServiceConfig interface {
 
 //Service handled by the load balancers
 type Service struct {
-	Type     string        `json:"type,omitempty"`
+	Type     ServiceType   `json:"type,omitempty"`
 	Metadata Metadata      `json:"metadata,omitempty"`
 	Config   ServiceConfig `json:"config,omitempty"`
 }
@@ -57,7 +57,7 @@ type MessageList struct {
 }
 
 //ByType filter messages by type
-func (l MessageList) ByType(typ string) []Message {
+func (l MessageList) ByType(typ ServiceType) []Message {
 	var ret []Message
 	for _, m := range l.List {
 		if m.Type == typ {
