@@ -26,28 +26,28 @@ type Service struct {
 //configured on the loadbalancers. Thee services
 //are returned as Messages, with the actual configurartion
 //still in json format.
-func ListServices(url string) ([]Message, error) {
+func ListServices(url string) ([]Service, error) {
 	res, err := http.Get(url + "/services")
 	if err != nil {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
 
 	dec := json.NewDecoder(res.Body)
-	msgs := []Message{}
+	svcs := []Service{}
 
 	//read all the Messages and alter parse the cofigs
 	for dec.More() {
-		var m Message
+		var s Service
 		// decode an array value (Message)
-		err := dec.Decode(&m)
+		err := dec.Decode(&s)
 		if err != nil {
 			return nil, errors.Wrap(err, "error decoding a Service object")
 		}
-		msgs = append(msgs, m)
+		svcs = append(svcs, s)
 	}
 	res.Body.Close()
 
-	return msgs, nil
+	return svcs, nil
 }
 
 //MessageList is a list of Message that collcet some

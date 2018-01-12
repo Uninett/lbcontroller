@@ -2,7 +2,6 @@ package nlb
 
 import (
 	"bytes"
-	"net"
 	"net/http"
 	"time"
 
@@ -51,7 +50,7 @@ type Metadata struct {
 //	}
 //}
 type FrontendConfig struct {
-	Addresses []net.IP `json:"addresses,omitempty"`
+	Addresses []string `json:"addresses,omitempty"`
 }
 
 //Frontend type for the load balancers
@@ -157,7 +156,7 @@ type SharedHTTPConfig struct {
 
 //HTTP is the HTTP part of a a SharedHTTPConfig
 type HTTP struct {
-	RedirectHTTPS bool            `json:"redirect_https,omitempty"`
+	RedirectHTTPS bool            `json:"redirect_https"`
 	BackendPort   int             `json:"backend_port,omitempty"`
 	HealthCheck   HTTPHealthCheck `json:"health_check,omitempty"`
 }
