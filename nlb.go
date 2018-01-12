@@ -83,18 +83,24 @@ type Frontend struct {
 // 	"frontend": "foobar"
 // }
 type TCPConfig struct {
-	Method           string             `json:"method,omitempty"`
-	Ports            []uint16           `json:"ports,omitempty"`
-	Backends         map[string]Backend `json:"backends,omitempty"`
-	UpstreamMaxConns int                `json:"upstream_max_conns,omitempty"`
-	ACL              []net.IPNet        `json:"acl,omitempty"`
-	HealthCheck      HealthCheck        `json:"health_check,omitempty"`
-	Frontend         string             `json:"frontend,omitempty"`
+	Method           string      `json:"method,omitempty"`
+	Ports            []uint16    `json:"ports,omitempty"`
+	Backends         []Backend   `json:"backends,omitempty"`
+	UpstreamMaxConns int         `json:"upstream_max_conns,omitempty"`
+	ACL              []string    `json:"acl,omitempty"`
+	HealthCheck      HealthCheck `json:"health_check,omitempty"`
+	Frontend         string      `json:"frontend,omitempty"`
+}
+
+//Type imprments the ServiceConfig interface
+func (tcpp TCPConfig) Type() ServiceType {
+	return TCP
 }
 
 // Backend represents a backend in the loadbalancer configuration
 type Backend struct {
-	Addrs []net.IP
+	Host  string
+	Addrs []string
 }
 
 // HealthCheck is a loadbalancer heath check
@@ -104,7 +110,6 @@ type HealthCheck struct {
 	Expect string `json:"expect,omitempty"`
 }
 
-//TODO (gta): finish the shared_http, they are not complete
 //SharedHTTPConfig represents the configuration of a TCP load balanced service, e.g.:
 //"config": {
 //	"names": ["site-a.example.com", "site-b.foo.org"],
@@ -135,12 +140,32 @@ type HealthCheck struct {
 //	]
 //}
 type SharedHTTPConfig struct {
-	Names            []string
-	StickyBackends   bool
-	BackendProtocols string
-	HTTP             json.RawMessage
-	HTTPS            json.RawMessage
-	Backends         []Backend
+	Names            []string           `json:"names,omitempty"`
+	StickyBackends   bool               `json:"sticky_backends,omitempty"`
+	BackendProtocols string             `json:"backend_protocols,omitempty"`
+	HTTP             HTTP               `json:"http,omitempty"`
+	HTTPS            HTTPS              `json:"https,omitempty"`
+	Backends         map[string]Backend `json:"backends,omitempty"`
+}
+
+//HTTP is the HTTP part of a a SharedHTTPConfig
+type HTTP struct {
+	RedirectHTTPS bool        `json:"redirect_https,omitempty"`
+	BackendPort   int         `json:"backend_port,omitempty"`
+	HealthCheck   HealthCheck `json:"health_check,omitempty"`
+}
+
+//HTTPS is the HTTPS part of a a SharedHTTPConfig
+type HTTPS struct {
+	PrivateKey  string      `json:"private_key,omitempty"`
+	Certificate string      `json:"certificate,omitempty"`
+	BackendPort int         `json:"backend_port,omitempty"`
+	HealthCheck HealthCheck `json:"health_check,omitempty"`
+}
+
+//Type imprments the ServiceConfig interface
+func (shttp SharedHTTPConfig) Type() ServiceType {
+	return SharedHTTP
 }
 
 //prepare the http request and marchal the object to send
@@ -166,4 +191,26 @@ const (
 	replace action = iota
 	reconfig
 	delete
+)
+
+/*
+type serviceType int
+
+const (
+	tcp serviceType = iota
+	tcpProxyProtocol
+	sharedHTTP
+	mediasite
+)
+*/
+
+// ServiceType represent the type of service offered by the load balancers
+type ServiceType string
+
+// known types of service
+const (
+	TCP              ServiceType = "tcp"
+	TCPProxyProtocol ServiceType = "tcp_proxy_protocol"
+	SharedHTTP       ServiceType = "shared-http"
+	Mediasite        ServiceType = "mediasite"
 )
