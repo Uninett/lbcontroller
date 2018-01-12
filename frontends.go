@@ -93,10 +93,89 @@ func NewFrontend(front Frontend, url string) (*Frontend, error) {
 	return ret, nil
 }
 
+//ReplaceFrontend replace and exixting frontend object, the new Frontend is retured.
+func ReplaceFrontend(front Frontend, url string) (*Frontend, error) {
+
+	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error replacing frontend %s/n", front.Metadata.Name)
+	}
+
+	defer res.Body.Close()
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+	ret := &Frontend{}
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding frontend object")
+	}
+	return ret, nil
+}
+
+//ReconfigFrontend replace and exixting frontend object, the new Frontend is retured.
+func ReconfigFrontend(front Frontend, url string) (*Frontend, error) {
+
+	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PATCH")
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reconfiguring frontend %s/n", front.Metadata.Name)
+	}
+
+	defer res.Body.Close()
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+	ret := &Frontend{}
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding frontend object")
+	}
+	return ret, nil
+}
+
+//DeleteFrontend replace and exixting frontend object, the new Frontend is retured.
+func DeleteFrontend(name, url string) (*Frontend, error) {
+
+	req, err := http.NewRequest("PUT", url+"/"+name, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+	req.Header.Set("Content-Type", jsonContent)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error replacing frontend %s/n", name)
+	}
+
+	defer res.Body.Close()
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+	ret := &Frontend{}
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding frontend object")
+	}
+	return ret, nil
+}
+
 //EditFrontend edit and existing frontend object according to the action, the new Frontend is retured.
-func EditFrontend(front Frontend, url string, act action) (*Frontend, error) {
+func EditFrontend(front Frontend, url string, action action) (*Frontend, error) {
 	var httpMethod string
-	switch act {
+	switch action {
 	case replace:
 		httpMethod = "PUT"
 	case reconfig:
@@ -104,7 +183,7 @@ func EditFrontend(front Frontend, url string, act action) (*Frontend, error) {
 	case delete:
 		httpMethod = "DELETE"
 	default:
-		return nil, errors.Errorf("unrecognized action %s/n", act)
+		return nil, errors.Errorf("unrecognized action %s/n", action)
 	}
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, httpMethod)
