@@ -1,7 +1,7 @@
 package nlb
 
 import (
-	"fmt"
+	"bytes"
 	"reflect"
 	"testing"
 
@@ -49,51 +49,51 @@ const (
 		}
 	  }`
 	TestTCPServiceString string = `{
-		"type": "tcp",
-		"metadata": {
-			"name": "testservice"
-		},
-		"config": {
-			"method": "least_conn",
-			"ports": [
-				80,
-				443
-			],
-			"backends": [
-				{
-					"host": "hostname1.example.com",
-					"addrs": [
-						"10.3.2.43",
-						"2001:700:f00d::8"
-					]
-				},
-				{
-					"host": "hostname2.example.com",
-					"addrs": [
-						"10.3.2.53",
-						"2001:700:f00d::18"
-					]
-				}
-			],
-			"upstream_max_conns": 100,
-			"acl": [
-				"10.10.20.0/24",
-				"2001:700:1337::/48"
-			],
-			"health_check": {
-				"port": 1337,
-				"send": "healthz\n",
-				"expect": "^OK$"
+	"type": "tcp",
+	"metadata": {
+		"name": "testservice"
+	},
+	"config": {
+		"method": "least_conn",
+		"ports": [
+			80,
+			443
+		],
+		"backends": [
+			{
+				"host": "hostname1.example.com",
+				"addrs": [
+					"10.3.2.43",
+					"2001:700:f00d::8"
+				]
 			},
-			"frontend": "foobar"
-		}
-	}`
+			{
+				"host": "hostname2.example.com",
+				"addrs": [
+					"10.3.2.53",
+					"2001:700:f00d::18"
+				]
+			}
+		],
+		"upstream_max_conns": 100,
+		"acl": [
+			"10.10.20.0/24",
+			"2001:700:1337::/48"
+		],
+		"health_check": {
+			"port": 1337,
+			"send": "healthz\n",
+			"expect": "^OK$"
+		},
+		"frontend": "foobar"
+	}
+}`
 )
 
 var testSharedHTTPServiceGo = Service{
 	Type: "tcp",
 	Metadata: Metadata{
-		Name: "testService",
+		Name: "testservice",
 	},
 	Config: TCPConfig{
 		Method: "least_conn",
@@ -154,33 +154,20 @@ func TestUnmarshalTCPService(t *testing.T) {
 	}
 }
 
+//This might get a bit flaky...
 func TestMarshalTCPService(t *testing.T) {
 
-	//msg := Message{
-	//	Type:     "tcp",
-	//	Metadata: Metadata{},
-	//}
-	msg := new(Message)
-	err := json.Unmarshal([]byte(TestTCPServiceString), msg)
+	j, err := json.Marshal(testSharedHTTPServiceGo)
 	if err != nil {
-		t.Errorf("TestUnmarshalTCPService() error umarshalling message = %v", err)
+		t.Errorf("TestMarshalTCPService() error marshalling = %v", err)
 		return
 	}
-
-	//tcpConf := TCPConfig{
-	//	Method: "least_conn",
-	//	Ports:  []uint16{80, 443},
-	//}
-	tcpConf := new(TCPConfig)
-	err = json.Unmarshal(msg.Config, tcpConf)
-	if err != nil {
-		t.Errorf("TestUnmarshalTCPService() error umarshalling config = %v", err)
-		return
+	var out bytes.Buffer
+	json.Indent(&out, j, "", "\t")
+	got := out.String()
+	want := TestTCPServiceString
+	if want != got {
+		t.Errorf("TestMarshalTCPService() = %+v, want %+v", got, want)
 	}
-	fmt.Printf("%#v\n", tcpConf)
 
-	//want := Service{}
-	//if !reflect.DeepEqual(got, want) {
-	//	t.Errorf("TestUnmarshalTCPService() = %v, want %v", got, want)
-	//}
 }

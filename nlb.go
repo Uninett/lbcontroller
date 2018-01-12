@@ -99,8 +99,8 @@ func (tcpp TCPConfig) Type() ServiceType {
 
 // Backend represents a backend in the loadbalancer configuration
 type Backend struct {
-	Host  string
-	Addrs []string
+	Host  string   `json:"host,omitempty"`
+	Addrs []string `json:"addrs,omitempty"`
 }
 
 // HealthCheck is a loadbalancer heath check
