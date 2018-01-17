@@ -12,7 +12,7 @@ import (
 //ListFrontends get a list of frontends configured on the load balancers
 func ListFrontends(url string) ([]Frontend, error) {
 
-	res, err := http.Get(url + "/frontends")
+	res, err := http.Get(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
@@ -20,7 +20,7 @@ func ListFrontends(url string) ([]Frontend, error) {
 	dec := json.NewDecoder(res.Body)
 	msgs := []Frontend{}
 
-	//read all the Messages and alter parse the cofigs
+	//read all the Messages and parse the cofigs
 	for dec.More() {
 		var m Frontend
 		// decode an array value (Message)
@@ -42,7 +42,7 @@ func ListFrontends(url string) ([]Frontend, error) {
 func GetFrontend(name, url string) (*Frontend, error) {
 	ret := &Frontend{}
 
-	res, err := http.Get(url + "/frontend/" + name)
+	res, err := http.Get(url + "/" + name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
@@ -74,7 +74,7 @@ func NewFrontend(front Frontend, url string) (*Frontend, error) {
 	}
 	buf := bytes.NewBuffer(data)
 
-	res, err := http.Post(url, jsonContent, buf)
+	res, err := http.Post(url+"/"+front.Metadata.Name, jsonContent, buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error POSTing new frontend")
 	}

@@ -27,7 +27,7 @@ type Service struct {
 //are returned as Messages, with the actual configurartion
 //still in json format.
 func ListServices(url string) ([]Service, error) {
-	res, err := http.Get(url + "/services")
+	res, err := http.Get(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
@@ -50,23 +50,6 @@ func ListServices(url string) ([]Service, error) {
 	return svcs, nil
 }
 
-//MessageList is a list of Message that collcet some
-//utility methods such as filtering by name or type.
-type MessageList struct {
-	List []Message
-}
-
-//ByType filter messages by type
-func (l MessageList) ByType(typ ServiceType) []Message {
-	var ret []Message
-	for _, m := range l.List {
-		if m.Type == typ {
-			ret = append(ret, m)
-		}
-	}
-	return ret
-}
-
 //NewService create a new service
 func NewService(svc Service, url string) (*Metadata, error) {
 	data, err := json.Marshal(svc)
@@ -75,7 +58,7 @@ func NewService(svc Service, url string) (*Metadata, error) {
 	}
 	buf := bytes.NewBuffer(data)
 
-	res, err := http.Post(url, jsonContent, buf)
+	res, err := http.Post(url+"/"+svc.Metadata.Name, jsonContent, buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating new service")
 	}
@@ -88,7 +71,109 @@ func NewService(svc Service, url string) (*Metadata, error) {
 	ret := &Metadata{}
 	err = json.Unmarshal(bytes, ret)
 	if err != nil {
-		return nil, errors.Wrap(err, "error decoding frontend object")
+		return nil, errors.Wrap(err, "error decoding Service object")
+	}
+	return ret, nil
+}
+
+//GetService get the configuration of the fronten specified by name
+func GetService(name, url string) (*Service, error) {
+	ret := &Service{}
+
+	res, err := http.Get(url + "/" + name)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
+	}
+	defer res.Body.Close()
+
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding Service object")
+	}
+
+	return ret, nil
+}
+
+//ReplaceService replace and exixting Service object, the new Service is retured.
+func ReplaceService(front Service, url string) (*Service, error) {
+
+	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error replacing Service %s/n", front.Metadata.Name)
+	}
+
+	defer res.Body.Close()
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+	ret := &Service{}
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding Service object")
+	}
+	return ret, nil
+}
+
+//ReconfigService replace and exixting Service object, the new Service is retured.
+func ReconfigService(front Service, url string) (*Service, error) {
+
+	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PATCH")
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reconfiguring Service %s/n", front.Metadata.Name)
+	}
+
+	defer res.Body.Close()
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+	ret := &Service{}
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding Service object")
+	}
+	return ret, nil
+}
+
+//DeleteService replace and exixting Service object, the new Service is retured.
+func DeleteService(name, url string) (*Service, error) {
+
+	req, err := http.NewRequest("PUT", url+"/"+name, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+	req.Header.Set("Content-Type", jsonContent)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error replacing Service %s/n", name)
+	}
+
+	defer res.Body.Close()
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+	ret := &Service{}
+	err = json.Unmarshal(bytes, ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding Service object")
 	}
 	return ret, nil
 }

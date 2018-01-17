@@ -169,7 +169,7 @@ type HTTPS struct {
 	HealthCheck HTTPHealthCheck `json:"health_check,omitempty"`
 }
 
-//Type imprments the ServiceConfig interface
+//Type imprlents the ServiceConfig interface
 func (shttp SharedHTTPConfig) Type() ServiceType {
 	return SharedHTTP
 }
@@ -210,10 +210,10 @@ const (
 )
 */
 
-// ServiceType represent the type of service offered by the load balancers
+// ServiceType represent the type of service offered by the load balancers.
 type ServiceType string
 
-// known types of service
+// Known types of service
 const (
 	TCP              ServiceType = "tcp"
 	TCPProxyProtocol ServiceType = "tcp_proxy_protocol"
