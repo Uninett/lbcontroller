@@ -22,7 +22,7 @@ var (
 func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/frontends", listFrontends).Methods("GET")
-	router.HandleFunc("/frontends/{name}", listFrontends).Methods("GET")
+	router.HandleFunc("/frontends/{name}", getFrontend).Methods("GET")
 	router.HandleFunc("/frontends", newFrontend).Methods("POST")
 	router.HandleFunc("/frontends/{name}", editFrontends).Methods("PUT", "DELETE", "PATCH")
 
@@ -34,23 +34,24 @@ func main() {
 	http.ListenAndServe(":8080", router)
 }
 
-func listFrontends(res http.ResponseWriter, req *http.Request) {
+func getFrontend(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 	vars := mux.Vars(req)
 	name := vars["name"]
 
 	var outData interface{}
-	if len(name) != 0 { //we want a specific frontend
-		var present bool
-		outData, present = frontends[name]
-		if !present {
-			res.WriteHeader(http.StatusNotFound)
-			//fmt.Fprint(res, string("Frontend not found"))
-			return
-		}
+	if len(name) == 0 { //we want a specific frontend
+		log.Println("need to specify a name")
+		http.Error(res, "need to specify a name", http.StatusInternalServerError)
+		return
+	}
 
-	} else { //if a name is not specified we return all the frontends
-		outData = frontends
+	var present bool
+	outData, present = frontends[name]
+	if !present {
+		res.WriteHeader(http.StatusNotFound)
+		//fmt.Fprint(res, string("Frontend not found"))
+		return
 	}
 	outgoingJSON, error := json.Marshal(outData)
 	if error != nil {
@@ -59,6 +60,20 @@ func listFrontends(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 	fmt.Fprint(res, string(outgoingJSON))
+}
+
+func listFrontends(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Content-Type", "application/json")
+	for _, frt := range frontends {
+
+		outgoingJSON, error := json.Marshal(frt)
+		if error != nil {
+			log.Println(error.Error())
+			http.Error(res, error.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(res, string(outgoingJSON))
+	}
 }
 
 func newFrontend(res http.ResponseWriter, req *http.Request) {
