@@ -22,6 +22,43 @@ type Service struct {
 	Config   ServiceConfig `json:"config,omitempty"`
 }
 
+// UnmarshalJSON implements json.Unmarshaller interface
+func (svc *Service) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte("null")) {
+		return nil
+	}
+	msg := new(Message)
+	err := json.Unmarshal(data, msg)
+	if err != nil {
+		return errors.Wrap(err, "Error unmarsalling service")
+	}
+
+	switch msg.Type {
+	case TCP, TCPProxyProtocol:
+		tcpConf := new(TCPConfig)
+		err = json.Unmarshal(msg.Config, tcpConf)
+		if err != nil {
+			return errors.Wrap(err, "Error unmarsalling TCP service configuration")
+		}
+		svc.Type = msg.Type
+		svc.Metadata = msg.Metadata
+		svc.Config = tcpConf
+	case SharedHTTP:
+		httpConf := new(SharedHTTPConfig)
+		err = json.Unmarshal(msg.Config, httpConf)
+		if err != nil {
+			return errors.Wrap(err, "Error unmarsalling SharedHTTP service configuration")
+		}
+		svc.Type = msg.Type
+		svc.Metadata = msg.Metadata
+		svc.Config = httpConf
+	case Mediasite:
+		return errors.New("mediasite service unsupported")
+	}
+
+	return nil
+}
+
 //ListServices return a list of services
 //configured on the loadbalancers. Thee services
 //are returned as Messages, with the actual configurartion

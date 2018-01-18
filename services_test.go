@@ -265,3 +265,55 @@ func TestUnmarshalSharedHTTPService(t *testing.T) {
 		t.Errorf("TestUnmarshalSharedHTTPService() Config = %+v, want %+v", got2, want2)
 	}
 }
+
+func TestServiceUnmashaller(t *testing.T) {
+	svc := new(Service)
+	err := json.Unmarshal([]byte(TestSharedHTTPServiceString), svc)
+	if err != nil {
+		t.Errorf("TestServiceUnmashaller() error umarshalling shared http service = %v", err)
+		return
+	}
+	got := svc.Type
+	want := testSharedHTTPServiceGo.Type
+	if got != want {
+		t.Errorf("TestServiceUnmashaller()Type = %+v, want %+v", got, want)
+		return
+	}
+
+	got1 := svc.Metadata
+	want1 := testSharedHTTPServiceGo.Metadata
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TestServiceUnmashaller() Metadata = %+v, want %+v", got1, want1)
+		return
+	}
+
+	got2 := &svc.Config
+	want2 := testSharedHTTPServiceGo.Config
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TestServiceUnmashaller() Config = %+v, want %+v", got2, want2)
+	}
+
+	svc = new(Service)
+	err = json.Unmarshal([]byte(TestTCPServiceString), svc)
+	if err != nil {
+		t.Errorf("TestServiceUnmashaller() error umarshalling tcp service = %v", err)
+		return
+	}
+	got = svc.Type
+	want = testTCPServiceGo.Type
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TestUnmarshalTCPService() Type = %+v, want %+v", got, want)
+	}
+
+	got1 = svc.Metadata
+	want1 = testTCPServiceGo.Metadata
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TestUnmarshalTCPService() Metadata = %+v, want %+v", got1, want1)
+	}
+
+	got2 = &svc.Config
+	want2 = testTCPServiceGo.Config
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TestUnmarshalTCPService()Config  = %+v, want %+v", got2, want2)
+	}
+}
