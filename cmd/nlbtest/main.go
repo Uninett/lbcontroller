@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/pkg/errors"
@@ -11,6 +12,7 @@ import (
 	"github.com/koki/json"
 
 	"github.com/folago/nlb"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
@@ -31,7 +33,8 @@ func main() {
 	router.HandleFunc("/services", newService).Methods("POST")
 	router.HandleFunc("/services/{name}", editService).Methods("PUT", "DELETE", "PATCH")
 
-	http.ListenAndServe(":8080", router)
+	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
+	http.ListenAndServe(":8080", loggedRouter)
 }
 
 func getFrontend(res http.ResponseWriter, req *http.Request) {
