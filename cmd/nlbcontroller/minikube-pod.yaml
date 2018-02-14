@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: Pod
-metadata:
-  name: l4lb
-spec:
-  containers:
-  - name: l4lb
-    image: l4lb:latest
-    imagePullPolicy: Never
