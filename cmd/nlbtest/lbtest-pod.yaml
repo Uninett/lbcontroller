@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nlbtest
+spec:
+  containers:
+  - name: nlbtest
+    image: nlbtest:latest
+    imagePullPolicy: Never
