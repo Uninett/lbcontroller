@@ -17,9 +17,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"time"
 
-	"github.com/golang/glog"
+	"log"
+
+	"nlb/nlb"
+
+	"github.com/pkg/errors"
 	"k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,11 +37,23 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// max retries for a queued object
-var maxRetries = 3
+var (
+	// max retries for a queued object
+	maxRetries = 3
+	lbendpoint string
+)
 
 func main() {
 	flag.Parse()
+
+	//check is we have a load balancer endpoint
+	lbendpoint = os.Getenv("NLB_ENDPOINT")
+	if len(lbendpoint) == 0 {
+		fmt.Println("No load balancer endpoint defined, NLB_ENDPOINT not set in environment")
+		os.Exit(1)
+	}
+	fmt.Printf("Load balancer endpoint: %s\n", lbendpoint)
+
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -46,7 +63,7 @@ func main() {
 	// creates the clientset
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal(err)
 	}
 
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
@@ -117,7 +134,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	// make sure the work queue is shutdown which will trigger workers to end
 	defer c.queue.ShutDown()
 
-	glog.Info("Starting l4lb controller")
+	log.Println("Starting l4lb controller")
 
 	go c.informer.Run(stopCh)
 
@@ -127,7 +144,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	glog.Info("l4lb controller synced and ready")
+	log.Println("l4lb controller synced and ready")
 
 	// runWorker will loop until "something bad" happens.  The .Until will
 	// then rekick the worker after one second
@@ -166,12 +183,12 @@ func (c *Controller) processNextItem() bool {
 		// No error, tell the queue to stop tracking history
 		c.queue.Forget(key)
 	} else if c.queue.NumRequeues(key) < maxRetries {
-		glog.Errorf("Error processing %s (will retry): %v", key, err)
+		log.Printf("Error processing %s (will retry): %v", key, err)
 		// requeue the item to work on later
 		c.queue.AddRateLimited(key)
 	} else {
 		// err != nil and too many retries
-		glog.Errorf("Error processing %s (giving up): %v", key, err)
+		log.Printf("Error processing %s (giving up): %v", key, err)
 		c.queue.Forget(key)
 		utilruntime.HandleError(err)
 	}
@@ -180,22 +197,26 @@ func (c *Controller) processNextItem() bool {
 }
 
 func (c *Controller) processItem(key string) error {
-	glog.Infof("Processing change to Service %s", key)
+	log.Printf("Processing change to Service %s", key)
 
 	obj, exists, err := c.informer.GetIndexer().GetByKey(key)
 	if err != nil {
-		return fmt.Errorf("Error fetching object with key %s from store: %v", key, err)
+		return errors.Errorf("Error fetching object with key %s from store: %v", key, err)
 	}
 
 	if !exists {
 		//fmt.Printf("Deleted Service %s\n", obj.(*v1.Service).GetName())
 		//obj is nil
-		glog.Infof("Deleted Service with key %s\n", key)
+		log.Printf("Deleted Service with key %s\n", key)
 		return nil
 	}
-
 	svc := obj.(*v1.Service)
-	glog.Infof("Sync/Add/Update for Service %s\n", svc.GetName())
+	_, err = nlb.GetService(svc.GetName(), lbendpoint+"/services")
+	if err != nil {
+		//log.Println(err)
+		return errors.Wrap(err, "Error getting list of load balancer services")
+	}
+	log.Printf("Sync/Add/Update for Service %s\n", svc.GetName())
 	fmt.Println("service type: ", svc.Spec.Type)
 	fmt.Println("service status: ", svc.Status)
 
