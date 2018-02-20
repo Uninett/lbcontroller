@@ -7,3 +7,6 @@ spec:
   - name: l4lb
     image: l4lb:latest
     imagePullPolicy: Never
+    env:
+      - name: NLB_ENDPOINT
+        value: "loadbalacer:8080"

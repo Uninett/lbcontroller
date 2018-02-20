@@ -17,14 +17,14 @@ package main
 import (
 	"flag"
 	"fmt"
+
+	"log"
 	"os"
 	"time"
 
-	"log"
-
-	"nlb/nlb"
-
+	"github.com/folago/nlb"
 	"github.com/pkg/errors"
+
 	"k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,10 +49,10 @@ func main() {
 	//check is we have a load balancer endpoint
 	lbendpoint = os.Getenv("NLB_ENDPOINT")
 	if len(lbendpoint) == 0 {
-		fmt.Println("No load balancer endpoint defined, NLB_ENDPOINT not set in environment")
-		os.Exit(1)
+
+		log.Fatalln("No load balancer endpoint defined, NLB_ENDPOINT not set in environment")
 	}
-	fmt.Printf("Load balancer endpoint: %s\n", lbendpoint)
+	log.Printf("Load balancer endpoint: %s\n", lbendpoint)
 
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
@@ -211,14 +211,29 @@ func (c *Controller) processItem(key string) error {
 		return nil
 	}
 	svc := obj.(*v1.Service)
-	_, err = nlb.GetService(svc.GetName(), lbendpoint+"/services")
-	if err != nil {
-		//log.Println(err)
-		return errors.Wrap(err, "Error getting list of load balancer services")
-	}
-	log.Printf("Sync/Add/Update for Service %s\n", svc.GetName())
-	fmt.Println("service type: ", svc.Spec.Type)
-	fmt.Println("service status: ", svc.Status)
 
+	sname := svc.GetName()
+	log.Printf("Sync/Add/Update for Service %s\n", sname)
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+		fmt.Printf("service %s of  type %s\n", sname, svc.Spec.Type)
+		targetSvc, err := nlb.GetService(sname, lbendpoint+"/services")
+		if err != nil {
+			//log.Println(err)
+			return errors.Wrap(err, "Error getting list of load balancer services")
+		}
+		targetSvc.Metadata.Name = sname
+		targetSvc.Config = nlb.TCPConfig{
+			Method: "leat_conn",
+			//Ports: svc.Spec.Ports
+		}
+		meta, err := nlb.NewService(*targetSvc, lbendpoint+"/services")
+		if err != nil {
+			//log.Println(err)
+			return errors.Wrap(err, "Error creating a new load balancer service")
+		}
+		fmt.Println("created load balancer", meta)
+
+		fmt.Println("service status: ", svc.Status)
+	}
 	return nil
 }
