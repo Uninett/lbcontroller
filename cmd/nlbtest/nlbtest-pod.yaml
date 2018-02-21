@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nlbtest
+  labels:
+    app: nlbtest
+spec:
+  containers:
+  - name: nlbtest
+    image: nlbtest:latest
+    imagePullPolicy: Never
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-api
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: nlbtest
+---
+apiVersion: extensions/v1beta1
+kind: NetworkPolicy
+metadata:
+  name: nlbtest
+spec:
+  podSelector:
+    matchLabels:
+      app: nlbtest
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            pp: controller
+      ports:
+        - protocol: TCP
+          port: 8080
