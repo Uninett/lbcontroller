@@ -31,11 +31,13 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
-	homedir "github.com/mitchellh/go-homedir"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/folago/nlb"
+	"github.com/koki/json"
+	"github.com/pkg/errors"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -43,74 +45,77 @@ var (
 	apiURL  string
 )
 
-func init() {
-	cobra.OnInitialize(initConfig)
+func main() {
+	app := cli.NewApp()
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.nlbctl.yaml)")
-	RootCmd.PersistentFlags().StringVar(&apiURL, "url", "", "URL of the API server for the loadbalancers")
-	viper.BindPFlag("url", RootCmd.PersistentFlags().Lookup("url"))
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:        "api",
+			Value:       "http://127.0.0.1:8080",
+			Usage:       "API endpoint",
+			Destination: &apiURL,
+		},
+	}
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	//RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	app.Commands = []cli.Command{
+		{
+			Name: "get",
+			//Aliases: []string{"t"},
+			Usage: "Display one or many resources",
+			Subcommands: []cli.Command{
+				{
+					Name:    "frontend",
+					Usage:   "display frontend(s)",
+					Aliases: []string{"frn"},
+					Action:  getNlbService,
+				},
+				{
+					Name:    "service",
+					Usage:   "display service(s)",
+					Aliases: []string{"svc"},
+					Action:  getNlbService,
+				},
+			},
+		},
+	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
+func getNlbService(c *cli.Context) error {
+	args := c.Args()
+
+	if len(args) == 0 { //get all
+		ret, err := nlb.ListServices(apiURL)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			return errors.Wrap(err, "error getting resources")
 		}
 
-		// Search config in home directory with name ".nlbctl.yaml".
-		viper.AddConfigPath(home)
-		viper.AddConfigPath(".")
-		viper.SetConfigName(".nlbctl")
+		data, err := json.MarshalIndent(ret, "", "  ")
+		if err != nil {
+			return errors.Wrap(err, "error printing response")
+		}
+		fmt.Printf("%s\n", data)
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	if len(args) == 1 { //get the first
+		name := args[0]
+		ret, found, err := nlb.GetService(name, apiURL)
+		if err != nil {
+			return errors.Wrap(err, "error getting resources")
+		}
+		if !found {
+			fmt.Printf("no service found found with name %s\n", name)
+			return nil
+		}
+		data, err := json.MarshalIndent(ret, "", "  ")
+		if err != nil {
+			return errors.Wrap(err, "error printing response")
+		}
+		fmt.Printf("%s\n", data)
 	}
-}
-
-// RootCmd represents the base command when called without any subcommands
-var RootCmd = &cobra.Command{
-	Use:       "nlbctl",
-	Short:     "nlbctl controls the loadbalancers",
-	Long:      `nlbctl controls the L4 loadbalancers of Uninett for NIRD.`,
-	Args:      cobra.MinimumNArgs(1),
-	ValidArgs: []string{"get", "delete", "create"},
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
-}
-
-// createCmd to create more resources
-var createCmd = &cobra.Command{
-	Use:   "get RESOURCE [NAME]",
-	Short: "Display one or many resources.",
-	Long:  "Display one or many resources.",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("create called")
-	},
-}
-
-func main() {
-	RootCmd.AddCommand(getCmd)
-	if err := RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	return nil
 }
