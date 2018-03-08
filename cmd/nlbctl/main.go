@@ -30,13 +30,9 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
-	"github.com/folago/nlb"
-	"github.com/koki/json"
-	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -54,6 +50,7 @@ func main() {
 			Value:       "http://127.0.0.1:8080",
 			Usage:       "API endpoint",
 			Destination: &apiURL,
+			EnvVar:      "NLB_API",
 		},
 	}
 
@@ -66,14 +63,14 @@ func main() {
 				{
 					Name:    "frontend",
 					Usage:   "display frontend(s)",
-					Aliases: []string{"frn"},
-					Action:  getNlbService,
+					Aliases: []string{"fnt"},
+					Action:  getFrontend,
 				},
 				{
 					Name:    "service",
 					Usage:   "display service(s)",
 					Aliases: []string{"svc"},
-					Action:  getNlbService,
+					Action:  getService,
 				},
 			},
 		},
@@ -83,39 +80,4 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func getNlbService(c *cli.Context) error {
-	args := c.Args()
-
-	if len(args) == 0 { //get all
-		ret, err := nlb.ListServices(apiURL)
-		if err != nil {
-			return errors.Wrap(err, "error getting resources")
-		}
-
-		data, err := json.MarshalIndent(ret, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, "error printing response")
-		}
-		fmt.Printf("%s\n", data)
-	}
-
-	if len(args) == 1 { //get the first
-		name := args[0]
-		ret, found, err := nlb.GetService(name, apiURL)
-		if err != nil {
-			return errors.Wrap(err, "error getting resources")
-		}
-		if !found {
-			fmt.Printf("no service found found with name %s\n", name)
-			return nil
-		}
-		data, err := json.MarshalIndent(ret, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, "error printing response")
-		}
-		fmt.Printf("%s\n", data)
-	}
-	return nil
 }
