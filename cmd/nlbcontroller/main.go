@@ -214,24 +214,42 @@ func (c *Controller) processItem(key string) error {
 
 	sname := svc.GetName()
 	log.Printf("Sync/Add/Update for Service %s\n", sname)
+
 	if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
-		fmt.Printf("service %s of  type %s\n", sname, svc.Spec.Type)
-		targetSvc, err := nlb.GetService(sname, lbendpoint+"/services")
+		log.Printf("service %s of type %s\n", sname, svc.Spec.Type)
+		lbSvc, found, err := nlb.GetService(sname, lbendpoint+"/services")
 		if err != nil {
-			//log.Println(err)
+			log.Println("ERROR: ", err)
 			return errors.Wrap(err, "Error getting list of load balancer services")
 		}
-		targetSvc.Metadata.Name = sname
-		targetSvc.Config = nlb.TCPConfig{
-			Method: "leat_conn",
-			//Ports: svc.Spec.Ports
+		fmt.Printf("Service received: %v\n", lbSvc)
+
+		//create the service, get the frontend, populate the service.status.loadBalancer.ingress
+		/*
+			get the lbservice, the name should be namespace.service
+			if not present create a new lbservice.
+				first chech if the k8service has a loadBalancerIP set, if yes
+					first create a frontend with that IP and referencr it
+					in the lbservice json object
+				create a new lbservice
+		*/
+		if !found {
+			lbSvc.Type = nlb.TCP
+			lbSvc.Metadata.Name = sname
+			lbSvc.Config = nlb.TCPConfig{
+				Method: "least_conn",
+				//Ports: svc.Spec.Ports
+			}
+			meta, err := nlb.NewService(*lbSvc, lbendpoint+"/services")
+			if err != nil {
+				//log.Println(err)
+				return errors.Wrap(err, "Error creating a new load balancer service")
+			}
+			fmt.Println("created load balancer", meta)
+		} else { //update here?
+			/*
+			 */
 		}
-		meta, err := nlb.NewService(*targetSvc, lbendpoint+"/services")
-		if err != nil {
-			//log.Println(err)
-			return errors.Wrap(err, "Error creating a new load balancer service")
-		}
-		fmt.Println("created load balancer", meta)
 
 		fmt.Println("service status: ", svc.Status)
 	}

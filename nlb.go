@@ -11,6 +11,11 @@ import (
 
 const jsonContent = "application/json"
 
+var (
+	servicePath  = "/service"
+	frontendPath = "/frontend"
+)
+
 //Message from/to the API endpoint, e.g.
 //{
 //	"type": "frontend"

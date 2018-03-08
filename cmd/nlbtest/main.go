@@ -79,15 +79,6 @@ func listFrontends(res http.ResponseWriter, req *http.Request) {
 
 func newFrontend(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(req)
-	name := vars["name"]
-	_, present := frontends[name]
-	if present {
-		err := errors.Errorf("Frontend %s already present\n", name)
-		log.Println(err)
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	newFront := nlb.Frontend{}
 	decoder := json.NewDecoder(req.Body)
@@ -97,6 +88,14 @@ func newFrontend(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, error.Error(), http.StatusInternalServerError)
 		return
 	}
+	_, present := frontends[newFront.Metadata.Name]
+	if present {
+		err := errors.Errorf("Frontend %s already present\n", newFront.Metadata.Name)
+		log.Println(err)
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	now := time.Now()
 	newFront.Metadata.CreatedAt = now
 	newFront.Metadata.UpdatedAt = now
@@ -158,7 +157,7 @@ func getService(res http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	name := vars["name"]
 
-	if len(name) != 0 {
+	if len(name) == 0 {
 		log.Println("need to specify a resource name")
 		http.Error(res, "need to specify a resource name", http.StatusInternalServerError)
 		return
@@ -195,15 +194,6 @@ func listServices(res http.ResponseWriter, req *http.Request) {
 
 func newService(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(req)
-	name := vars["name"]
-	_, present := services[name]
-	if present {
-		err := errors.Errorf("Frontend %s already present\n", name)
-		log.Println(err)
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	newSvc := nlb.Service{}
 	decoder := json.NewDecoder(req.Body)
@@ -211,6 +201,13 @@ func newService(res http.ResponseWriter, req *http.Request) {
 	if error != nil {
 		log.Println(error.Error())
 		http.Error(res, error.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, present := services[newSvc.Metadata.Name]
+	if present {
+		err := errors.Errorf("Service %s already present\n", newSvc.Metadata.Name)
+		log.Println(err)
+		http.Error(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	now := time.Now()

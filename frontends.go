@@ -17,6 +17,10 @@ func ListFrontends(url string) ([]Frontend, error) {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("error, returned status not 200 OK from API endpoint: %s\n ", res.Status)
+	}
+
 	dec := json.NewDecoder(res.Body)
 	msgs := []Frontend{}
 
@@ -74,7 +78,7 @@ func NewFrontend(front Frontend, url string) (*Frontend, error) {
 	}
 	buf := bytes.NewBuffer(data)
 
-	res, err := http.Post(url+"/"+front.Metadata.Name, jsonContent, buf)
+	res, err := http.Post(url, jsonContent, buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error POSTing new frontend")
 	}

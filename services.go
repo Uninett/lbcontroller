@@ -69,6 +69,10 @@ func ListServices(url string) ([]Service, error) {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("error, returned status not 200 OK from API endpoint: %s\n ", res.Status)
+	}
+
 	dec := json.NewDecoder(res.Body)
 	svcs := []Service{}
 
@@ -95,7 +99,7 @@ func NewService(svc Service, url string) (*Metadata, error) {
 	}
 	buf := bytes.NewBuffer(data)
 
-	res, err := http.Post(url+"/"+svc.Metadata.Name, jsonContent, buf)
+	res, err := http.Post(url, jsonContent, buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating new service")
 	}
@@ -113,27 +117,41 @@ func NewService(svc Service, url string) (*Metadata, error) {
 	return ret, nil
 }
 
-//GetService get the configuration of the fronten specified by name
-func GetService(name, url string) (*Service, error) {
+//GetService get the configuration of the fronten specified by name, if the service
+//is found GetService returnns a true boolean value as well
+func GetService(name, url string) (*Service, bool, error) {
 	ret := &Service{}
 
 	res, err := http.Get(url + "/" + name)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
+		return nil, false, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
 	defer res.Body.Close()
 
+	//catch all statuses and returns, except 200
+	switch res.StatusCode {
+	case http.StatusNotFound:
+		return &Service{}, false, nil
+	case http.StatusInternalServerError:
+		return nil, false, errors.Errorf("error from API endpoint, returned status %s\n ", res.Status)
+	case http.StatusOK:
+		break
+	default:
+		return nil, false, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
+	}
+
+	//if status code is 200 we go on
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
 	}
 
 	err = json.Unmarshal(bytes, ret)
 	if err != nil {
-		return nil, errors.Wrap(err, "error decoding Service object")
+		return nil, false, errors.Wrap(err, "error decoding Service object")
 	}
 
-	return ret, nil
+	return ret, true, nil
 }
 
 //ReplaceService replace and exixting Service object, the new Service is retured.
