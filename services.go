@@ -64,6 +64,8 @@ func (svc *Service) UnmarshalJSON(data []byte) error {
 //are returned as Messages, with the actual configurartion
 //still in json format.
 func ListServices(url string) ([]Service, error) {
+	url = svcURL(url)
+
 	res, err := http.Get(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
@@ -93,6 +95,8 @@ func ListServices(url string) ([]Service, error) {
 
 //NewService create a new service
 func NewService(svc Service, url string) (*Metadata, error) {
+
+	url = svcURL(url)
 	data, err := json.Marshal(svc)
 	if err != nil {
 		return nil, errors.Wrap(err, "error marshalling Service")
@@ -120,6 +124,8 @@ func NewService(svc Service, url string) (*Metadata, error) {
 //GetService get the configuration of the fronten specified by name, if the service
 //is found GetService returnns a true boolean value as well
 func GetService(name, url string) (*Service, bool, error) {
+
+	url = svcURL(url)
 	ret := &Service{}
 
 	res, err := http.Get(url + "/" + name)
@@ -156,6 +162,7 @@ func GetService(name, url string) (*Service, bool, error) {
 
 //ReplaceService replace and exixting Service object, the new Service is retured.
 func ReplaceService(front Service, url string) (*Service, error) {
+	url = svcURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
 	if err != nil {
@@ -182,6 +189,7 @@ func ReplaceService(front Service, url string) (*Service, error) {
 
 //ReconfigService replace and exixting Service object, the new Service is retured.
 func ReconfigService(front Service, url string) (*Service, error) {
+	url = svcURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PATCH")
 	if err != nil {
@@ -208,6 +216,7 @@ func ReconfigService(front Service, url string) (*Service, error) {
 
 //DeleteService replace and exixting Service object, the new Service is retured.
 func DeleteService(name, url string) (*Service, error) {
+	url = svcURL(url)
 
 	req, err := http.NewRequest("PUT", url+"/"+name, nil)
 	if err != nil {
@@ -231,4 +240,8 @@ func DeleteService(name, url string) (*Service, error) {
 		return nil, errors.Wrap(err, "error decoding Service object")
 	}
 	return ret, nil
+}
+
+func svcURL(url string) string {
+	return url + "/" + "services"
 }

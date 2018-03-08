@@ -11,6 +11,7 @@ import (
 
 //ListFrontends get a list of frontends configured on the load balancers
 func ListFrontends(url string) ([]Frontend, error) {
+	url = frontURL(url)
 
 	res, err := http.Get(url)
 	if err != nil {
@@ -43,26 +44,38 @@ func ListFrontends(url string) ([]Frontend, error) {
 }
 
 //GetFrontend get the configuration of the fronten specified by name
-func GetFrontend(name, url string) (*Frontend, error) {
+func GetFrontend(name, url string) (*Frontend, bool, error) {
+	url = frontURL(url)
 	ret := &Frontend{}
 
 	res, err := http.Get(url + "/" + name)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
+		return nil, false, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
 	defer res.Body.Close()
+	//catch all statuses and returns, except 200
+	switch res.StatusCode {
+	case http.StatusNotFound:
+		return &Frontend{}, false, nil
+	case http.StatusInternalServerError:
+		return nil, false, errors.Errorf("error from API endpoint, returned status %s\n ", res.Status)
+	case http.StatusOK:
+		break
+	default:
+		return nil, false, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
+	}
 
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
 	}
 
 	err = json.Unmarshal(bytes, ret)
 	if err != nil {
-		return nil, errors.Wrap(err, "error decoding frontend object")
+		return nil, false, errors.Wrap(err, "error decoding frontend object")
 	}
 
-	return ret, nil
+	return ret, true, nil
 }
 
 //NewFrontend creates a new frontend, the new frontent created is returned.
@@ -72,6 +85,7 @@ func GetFrontend(name, url string) (*Frontend, error) {
 //If this control is not needed, frontend objects will be created
 //automaticly if needed on service creation.
 func NewFrontend(front Frontend, url string) (*Frontend, error) {
+	url = frontURL(url)
 	data, err := json.Marshal(front)
 	if err != nil {
 		return nil, errors.Wrap(err, "error marshalling Frontend")
@@ -99,6 +113,7 @@ func NewFrontend(front Frontend, url string) (*Frontend, error) {
 
 //ReplaceFrontend replace and exixting frontend object, the new Frontend is retured.
 func ReplaceFrontend(front Frontend, url string) (*Frontend, error) {
+	url = frontURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
 	if err != nil {
@@ -125,6 +140,7 @@ func ReplaceFrontend(front Frontend, url string) (*Frontend, error) {
 
 //ReconfigFrontend replace and exixting frontend object, the new Frontend is retured.
 func ReconfigFrontend(front Frontend, url string) (*Frontend, error) {
+	url = frontURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PATCH")
 	if err != nil {
@@ -151,6 +167,7 @@ func ReconfigFrontend(front Frontend, url string) (*Frontend, error) {
 
 //DeleteFrontend replace and exixting frontend object, the new Frontend is retured.
 func DeleteFrontend(name, url string) (*Frontend, error) {
+	url = frontURL(url)
 
 	req, err := http.NewRequest("PUT", url+"/"+name, nil)
 	if err != nil {
@@ -178,6 +195,7 @@ func DeleteFrontend(name, url string) (*Frontend, error) {
 
 //EditFrontend edit and existing frontend object according to the action, the new Frontend is retured.
 func EditFrontend(front Frontend, url string, action action) (*Frontend, error) {
+	url = frontURL(url)
 	var httpMethod string
 	switch action {
 	case replace:
@@ -211,4 +229,8 @@ func EditFrontend(front Frontend, url string, action action) (*Frontend, error) 
 		return nil, errors.Wrap(err, "error decoding frontend object")
 	}
 	return ret, nil
+}
+
+func frontURL(url string) string {
+	return url + "/" + "frontends"
 }
