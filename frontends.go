@@ -142,30 +142,29 @@ func ReplaceFrontend(front Frontend, url string) (*Frontend, error) {
 }
 
 //ReconfigFrontend replace and exixting frontend object, the new Frontend is retured.
-func ReconfigFrontend(front Frontend, url string) (*Frontend, error) {
+func ReconfigFrontend(front Frontend, url string) error {
 	url = frontURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PATCH")
 	if err != nil {
-		return nil, errors.Wrap(err, "error creatign http.Request")
+		return errors.Wrap(err, "error creatign http.Request")
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reconfiguring frontend %s/n", front.Metadata.Name)
+		return errors.Wrapf(err, "error reconfiguring frontend %s/n", front.Metadata.Name)
 	}
 
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
+	if res.StatusCode != http.StatusNoContent {
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return errors.Wrapf(err, "error reading from API endpoint: %s", url)
+		}
+		return errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
 	}
-	ret := &Frontend{}
-	err = json.Unmarshal(body, ret)
-	if err != nil {
-		return nil, errors.Wrap(err, "error decoding frontend object")
-	}
-	return ret, nil
+
+	return nil
 }
 
 //DeleteFrontend replace and exixting frontend object, the new Frontend is retured.

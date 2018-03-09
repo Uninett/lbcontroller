@@ -191,30 +191,30 @@ func ReplaceService(front Service, url string) (*Service, error) {
 }
 
 //ReconfigService replace and exixting Service object, the new Service is retured.
-func ReconfigService(front Service, url string) (*Service, error) {
+func ReconfigService(svc Service, url string) error {
 	url = svcURL(url)
 
-	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PATCH")
+	req, err := prepareRequest(svc, url+"/"+svc.Metadata.Name, "PATCH")
 	if err != nil {
-		return nil, errors.Wrap(err, "error creatign http.Request")
+		return errors.Wrap(err, "error creatign http.Request")
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reconfiguring Service %s", front.Metadata.Name)
+		return errors.Wrapf(err, "error reconfiguring Service %s", svc.Metadata.Name)
 	}
 
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
+
+	if res.StatusCode != http.StatusNoContent {
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return errors.Wrapf(err, "error reading from API endpoint: %s", url)
+		}
+		return errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
 	}
-	ret := &Service{}
-	err = json.Unmarshal(body, ret)
-	if err != nil {
-		return nil, errors.Wrap(err, "error decoding Service object")
-	}
-	return ret, nil
+
+	return nil
 }
 
 //DeleteService deletes and exixting Service object, the new Service is retured.

@@ -131,6 +131,43 @@ func main() {
 				},
 			},
 		},
+		{
+			Name:    "reconfigure",
+			Aliases: []string{"reconfig", "rcfg"},
+			Usage:   "reconfigure a resource",
+			Subcommands: []cli.Command{
+				{
+					Name:      "frontend",
+					Usage:     "reconfigure an exixsting frontend",
+					UsageText: "reconfigure an exixsting frontend, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
+					Aliases:   []string{"fnt"},
+					Action:    reconfigFrontend,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:        "file, f",
+							Value:       "",
+							Usage:       "json file containing the resourse description",
+							Destination: &resFile,
+						},
+					},
+				},
+				{
+					Name:      "service",
+					Usage:     "reconfigure an exixsting service",
+					UsageText: "reconfigure an exixsting  service, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
+					Aliases:   []string{"svc"},
+					Action:    reconfigService,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:        "file, f",
+							Value:       "",
+							Usage:       "json file containing the resourse description",
+							Destination: &resFile,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	err := app.Run(os.Args)

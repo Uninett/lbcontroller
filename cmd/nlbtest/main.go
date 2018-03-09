@@ -231,6 +231,12 @@ func editService(res http.ResponseWriter, req *http.Request) {
 
 	switch req.Method {
 	case "PUT":
+		_, ok := services[name]
+		if !ok {
+			res.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(res, "Service %s not found", name)
+			return
+		}
 		delete(services, name)
 		newFrontend(res, req)
 		//res.WriteHeader(http.StatusNoContent)
@@ -239,13 +245,12 @@ func editService(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusNoContent)
 		return
 	case "PATCH":
-		editingFront, ok := services[name]
+		editingsvc, ok := services[name]
 		if !ok {
 			res.WriteHeader(http.StatusNotFound)
-			//fmt.Fprint(res, string("Frontend not found"))
+			fmt.Fprintf(res, "Service %s not found", name)
 			return
 		}
-
 		svc := nlb.Service{}
 		decoder := json.NewDecoder(req.Body)
 		error := decoder.Decode(&svc)
@@ -254,16 +259,17 @@ func editService(res http.ResponseWriter, req *http.Request) {
 			http.Error(res, error.Error(), http.StatusInternalServerError)
 			return
 		}
-		svc.Metadata.CreatedAt = editingFront.Metadata.CreatedAt
+		svc.Metadata.CreatedAt = editingsvc.Metadata.CreatedAt
 		svc.Metadata.UpdatedAt = time.Now()
 		services[name] = svc
-		outgoingJSON, err := json.Marshal(svc)
-		if err != nil {
-			log.Println(error.Error())
-			http.Error(res, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		//outgoingJSON, err := json.Marshal(svc)
+		//if err != nil {
+		//	log.Println(error.Error())
+		//	http.Error(res, err.Error(), http.StatusInternalServerError)
+		//	return
+		//}
 		//res.WriteHeader(http.StatusCreated)
-		fmt.Fprint(res, string(outgoingJSON))
+		//fmt.Fprint(res, string(outgoingJSON))
+		res.WriteHeader(http.StatusNoContent)
 	}
 }

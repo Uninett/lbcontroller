@@ -187,7 +187,7 @@ func prepareRequest(obj interface{}, url, method string) (*http.Request, error) 
 	}
 	buf := bytes.NewBuffer(data)
 
-	req, err := http.NewRequest("PUT", url, buf)
+	req, err := http.NewRequest(method, url, buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creatign http.Request")
 	}
