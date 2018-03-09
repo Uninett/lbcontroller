@@ -233,9 +233,11 @@ func editService(res http.ResponseWriter, req *http.Request) {
 	case "PUT":
 		delete(services, name)
 		newFrontend(res, req)
+		//res.WriteHeader(http.StatusNoContent)
 	case "DELETE":
 		delete(services, name)
 		res.WriteHeader(http.StatusNoContent)
+		return
 	case "PATCH":
 		editingFront, ok := services[name]
 		if !ok {
@@ -261,7 +263,7 @@ func editService(res http.ResponseWriter, req *http.Request) {
 			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		res.WriteHeader(http.StatusCreated)
+		//res.WriteHeader(http.StatusCreated)
 		fmt.Fprint(res, string(outgoingJSON))
 	}
 }

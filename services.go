@@ -68,11 +68,11 @@ func ListServices(url string) ([]Service, error) {
 
 	res, err := http.Get(url)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s", url)
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("error, returned status not 200 OK from API endpoint: %s\n ", res.Status)
+		return nil, errors.Errorf("error, returned status not 200 OK from API endpoint: %s", res.Status)
 	}
 
 	dec := json.NewDecoder(res.Body)
@@ -109,12 +109,18 @@ func NewService(svc Service, url string) (*Metadata, error) {
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
+
+	if res.StatusCode != http.StatusCreated {
+		return nil, errors.Errorf("API endpoint returned status %s, %s", res.Status, body)
+	}
+
 	ret := &Metadata{}
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding Service object")
 	}
@@ -130,29 +136,26 @@ func GetService(name, url string) (*Service, bool, error) {
 
 	res, err := http.Get(url + "/" + name)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
+		return nil, false, errors.Wrapf(err, "error connecting to API endpoint: %s", url)
 	}
 	defer res.Body.Close()
 
-	//catch all statuses and returns, except 200
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s", url)
+	}
+
+	//handle stautus 200 and 404
 	switch res.StatusCode {
 	case http.StatusNotFound:
 		return &Service{}, false, nil
-	case http.StatusInternalServerError:
-		return nil, false, errors.Errorf("error from API endpoint, returned status %s\n ", res.Status)
 	case http.StatusOK:
 		break
 	default:
 		return nil, false, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
 	}
 
-	//if status code is 200 we go on
-	bytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
-	}
-
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "error decoding Service object")
 	}
@@ -171,16 +174,16 @@ func ReplaceService(front Service, url string) (*Service, error) {
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error replacing Service %s/n", front.Metadata.Name)
+		return nil, errors.Wrapf(err, "error replacing Service %s", front.Metadata.Name)
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 	ret := &Service{}
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding Service object")
 	}
@@ -198,48 +201,47 @@ func ReconfigService(front Service, url string) (*Service, error) {
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reconfiguring Service %s/n", front.Metadata.Name)
+		return nil, errors.Wrapf(err, "error reconfiguring Service %s", front.Metadata.Name)
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 	ret := &Service{}
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding Service object")
 	}
 	return ret, nil
 }
 
-//DeleteService replace and exixting Service object, the new Service is retured.
-func DeleteService(name, url string) (*Service, error) {
+//DeleteService deletes and exixting Service object, the new Service is retured.
+func DeleteService(name, url string) error {
 	url = svcURL(url)
 
-	req, err := http.NewRequest("PUT", url+"/"+name, nil)
+	req, err := http.NewRequest("DELETE", url+"/"+name, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creatign http.Request")
+		return errors.Wrap(err, "error creatign http.Request")
 	}
 	req.Header.Set("Content-Type", jsonContent)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error replacing Service %s/n", name)
+		return errors.Wrapf(err, "error replacing Service %s", name)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return errors.Wrapf(err, "error reading from API endpoint: %s", url)
+		}
+		return errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
 	}
 
-	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
-	}
-	ret := &Service{}
-	err = json.Unmarshal(bytes, ret)
-	if err != nil {
-		return nil, errors.Wrap(err, "error decoding Service object")
-	}
-	return ret, nil
+	return nil
 }
 
 func svcURL(url string) string {

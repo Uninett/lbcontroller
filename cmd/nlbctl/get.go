@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+
+	"text/tabwriter"
 
 	"github.com/folago/nlb"
 	"github.com/koki/json"
@@ -17,12 +20,7 @@ func getService(c *cli.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "error getting resources")
 		}
-
-		data, err := json.MarshalIndent(ret, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, "error printing response")
-		}
-		fmt.Printf("%s\n", data)
+		printServiceList(ret)
 	}
 
 	if len(args) == 1 { //get the first
@@ -53,11 +51,7 @@ func getFrontend(c *cli.Context) error {
 			return errors.Wrap(err, "error getting resources")
 		}
 
-		data, err := json.MarshalIndent(ret, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, "error printing response")
-		}
-		fmt.Printf("%s\n", data)
+		printFrontendList(ret)
 	}
 
 	if len(args) == 1 { //get the first
@@ -77,4 +71,25 @@ func getFrontend(c *cli.Context) error {
 		fmt.Printf("%s\n", data)
 	}
 	return nil
+}
+
+func printServiceList(servs []nlb.Service) {
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 8, 8, 1, '\t', 0)
+	fmt.Fprintln(w, "SERVICES\tNAME\tTYPE")
+	for _, sv := range servs {
+		fmt.Fprintf(w, "\t%s\t%s\n", sv.Metadata.Name, sv.Type)
+	}
+	w.Flush()
+}
+
+func printFrontendList(fronts []nlb.Frontend) {
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 8, 8, 1, '\t', 0)
+	fmt.Fprintln(w, "FRONTENDS\tNAME\tADDRESSES")
+	for _, fr := range fronts {
+		fmt.Fprintf(w, "\t%s\t%s\n", fr.Metadata.Name, fr.Config.Addresses)
+
+	}
+	w.Flush()
 }

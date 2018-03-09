@@ -53,26 +53,25 @@ func GetFrontend(name, url string) (*Frontend, bool, error) {
 		return nil, false, errors.Wrapf(err, "error connecting to API endpoint: %s\n ", url)
 	}
 	defer res.Body.Close()
-	//catch all statuses and returns, except 200
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+	}
+
+	//handle stautus 200 and 404
 	switch res.StatusCode {
 	case http.StatusNotFound:
 		return &Frontend{}, false, nil
-	case http.StatusInternalServerError:
-		return nil, false, errors.Errorf("error from API endpoint, returned status %s\n ", res.Status)
 	case http.StatusOK:
 		break
 	default:
 		return nil, false, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
 	}
 
-	bytes, err := ioutil.ReadAll(res.Body)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
-	}
-
-	err = json.Unmarshal(bytes, ret)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "error decoding frontend object")
+		return nil, false, errors.Errorf("API endpoint returned status %s, %s\n ", res.Status, bytes.TrimSpace(body))
 	}
 
 	return ret, true, nil
@@ -84,7 +83,7 @@ func GetFrontend(name, url string) (*Frontend, bool, error) {
 //(and possibly reused) by the various services.
 //If this control is not needed, frontend objects will be created
 //automaticly if needed on service creation.
-func NewFrontend(front Frontend, url string) (*Frontend, error) {
+func NewFrontend(front Frontend, url string) (*Metadata, error) {
 	url = frontURL(url)
 	data, err := json.Marshal(front)
 	if err != nil {
@@ -96,17 +95,21 @@ func NewFrontend(front Frontend, url string) (*Frontend, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error POSTing new frontend")
 	}
-	// now we have to return the new frontend
-
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
-	ret := &Frontend{}
-	err = json.Unmarshal(bytes, ret)
+
+	if res.StatusCode != http.StatusCreated {
+		return nil, errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
+	}
+
+	ret := &Metadata{}
+	err = json.Unmarshal(body, ret)
 	if err != nil {
-		return nil, errors.Wrap(err, "error decoding frontend object")
+		return nil, errors.Wrapf(err, "error decoding Metadata object %s", body)
 	}
 	return ret, nil
 }
@@ -126,12 +129,12 @@ func ReplaceFrontend(front Frontend, url string) (*Frontend, error) {
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 	ret := &Frontend{}
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding frontend object")
 	}
@@ -153,12 +156,12 @@ func ReconfigFrontend(front Frontend, url string) (*Frontend, error) {
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 	ret := &Frontend{}
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding frontend object")
 	}
@@ -166,31 +169,31 @@ func ReconfigFrontend(front Frontend, url string) (*Frontend, error) {
 }
 
 //DeleteFrontend replace and exixting frontend object, the new Frontend is retured.
-func DeleteFrontend(name, url string) (*Frontend, error) {
+func DeleteFrontend(name, url string) error {
 	url = frontURL(url)
 
-	req, err := http.NewRequest("PUT", url+"/"+name, nil)
+	req, err := http.NewRequest("DELETE", url+"/"+name, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creatign http.Request")
+		return errors.Wrap(err, "error creatign http.Request")
 	}
 	req.Header.Set("Content-Type", jsonContent)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error replacing frontend %s/n", name)
+		return errors.Wrapf(err, "error replacing frontend %s", name)
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+
+	if res.StatusCode != http.StatusNoContent {
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return errors.Wrapf(err, "error reading from API endpoint: %s", url)
+		}
+		return errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
 	}
-	ret := &Frontend{}
-	err = json.Unmarshal(bytes, ret)
-	if err != nil {
-		return nil, errors.Wrap(err, "error decoding frontend object")
-	}
-	return ret, nil
+
+	return nil
 }
 
 //EditFrontend edit and existing frontend object according to the action, the new Frontend is retured.
@@ -205,7 +208,7 @@ func EditFrontend(front Frontend, url string, action action) (*Frontend, error) 
 	case delete:
 		httpMethod = "DELETE"
 	default:
-		return nil, errors.Errorf("unrecognized action %s/n", action)
+		return nil, errors.Errorf("unrecognized action %s", action)
 	}
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, httpMethod)
@@ -219,12 +222,12 @@ func EditFrontend(front Frontend, url string, action action) (*Frontend, error) 
 	}
 
 	defer res.Body.Close()
-	bytes, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s\n ", url)
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 	ret := &Frontend{}
-	err = json.Unmarshal(bytes, ret)
+	err = json.Unmarshal(body, ret)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding frontend object")
 	}

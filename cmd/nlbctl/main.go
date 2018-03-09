@@ -39,6 +39,7 @@ import (
 var (
 	cfgFile string
 	apiURL  string
+	resFile string
 )
 
 func main() {
@@ -71,6 +72,62 @@ func main() {
 					Usage:   "display service(s)",
 					Aliases: []string{"svc"},
 					Action:  getService,
+				},
+			},
+		},
+		{
+			Name:    "new",
+			Aliases: []string{"create"},
+			Usage:   " create new resources",
+			Subcommands: []cli.Command{
+				{
+					Name:      "frontend",
+					Usage:     "create a new frontend",
+					UsageText: "create a new frontend, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
+					Aliases:   []string{"fnt"},
+					Action:    newFrontend,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:        "file, f",
+							Value:       "",
+							Usage:       "json file containing the resourse description",
+							Destination: &resFile,
+						},
+					},
+				},
+				{
+					Name:      "service",
+					Usage:     "create a new service",
+					UsageText: "create a new service, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
+					Aliases:   []string{"svc"},
+					Action:    newService,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:        "file, f",
+							Value:       "",
+							Usage:       "json file containing the resourse description",
+							Destination: &resFile,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:    "delete",
+			Aliases: []string{"rm", "del"},
+			Usage:   "Delete a resource",
+			Subcommands: []cli.Command{
+				{
+					Name:    "frontend",
+					Usage:   "delete a frontend",
+					Aliases: []string{"fnt"},
+					Action:  delFrontend,
+				},
+				{
+					Name:    "service",
+					Usage:   "delete a service",
+					Aliases: []string{"svc"},
+					Action:  delService,
 				},
 			},
 		},
