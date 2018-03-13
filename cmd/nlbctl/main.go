@@ -168,6 +168,43 @@ func main() {
 				},
 			},
 		},
+		{
+			Name:    "replace",
+			Aliases: []string{"replace", "rcfg"},
+			Usage:   "replace a resource",
+			Subcommands: []cli.Command{
+				{
+					Name:      "frontend",
+					Usage:     "replace an exixsting frontend",
+					UsageText: "replace an exixsting frontend, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
+					Aliases:   []string{"fnt"},
+					Action:    replaceFrontend,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:        "file, f",
+							Value:       "",
+							Usage:       "json file containing the resourse description",
+							Destination: &resFile,
+						},
+					},
+				},
+				{
+					Name:      "service",
+					Usage:     "replace an exixsting service",
+					UsageText: "replace an exixsting  service, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
+					Aliases:   []string{"svc"},
+					Action:    replaceService,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:        "file, f",
+							Value:       "",
+							Usage:       "json file containing the resourse description",
+							Destination: &resFile,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	err := app.Run(os.Args)

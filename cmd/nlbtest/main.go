@@ -118,7 +118,19 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "PUT":
 		delete(frontends, name)
-		newFrontend(res, req)
+		newFront := nlb.Frontend{}
+		decoder := json.NewDecoder(req.Body)
+		error := decoder.Decode(&newFront)
+		if error != nil {
+			log.Println(error.Error())
+			http.Error(res, error.Error(), http.StatusInternalServerError)
+			return
+		}
+		now := time.Now()
+		newFront.Metadata.CreatedAt = now
+		newFront.Metadata.UpdatedAt = now
+		frontends[newFront.Metadata.Name] = newFront
+		res.WriteHeader(http.StatusNoContent)
 	case "DELETE":
 		delete(frontends, name)
 		res.WriteHeader(http.StatusNoContent)
@@ -126,7 +138,7 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 		editingFront, ok := frontends[name]
 		if !ok {
 			res.WriteHeader(http.StatusNotFound)
-			//fmt.Fprint(res, string("Frontend not found"))
+			fmt.Fprintf(res, "Frontend %s not found", name)
 			return
 		}
 
@@ -141,14 +153,15 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 		frontend.Metadata.CreatedAt = editingFront.Metadata.CreatedAt
 		frontend.Metadata.UpdatedAt = time.Now()
 		frontends[name] = frontend
-		outgoingJSON, err := json.Marshal(frontend)
-		if err != nil {
-			log.Println(error.Error())
-			http.Error(res, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		res.WriteHeader(http.StatusCreated)
-		fmt.Fprint(res, string(outgoingJSON))
+		//outgoingJSON, err := json.Marshal(frontend)
+		//if err != nil {
+		//	log.Println(error.Error())
+		//	http.Error(res, err.Error(), http.StatusInternalServerError)
+		//	return
+		//}
+		//res.WriteHeader(http.StatusCreated)
+		//fmt.Fprint(res, string(outgoingJSON))
+		res.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -238,12 +251,22 @@ func editService(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 		delete(services, name)
-		newFrontend(res, req)
-		//res.WriteHeader(http.StatusNoContent)
+		newSvc := nlb.Service{}
+		decoder := json.NewDecoder(req.Body)
+		error := decoder.Decode(&newSvc)
+		if error != nil {
+			log.Println(error.Error())
+			http.Error(res, error.Error(), http.StatusInternalServerError)
+			return
+		}
+		now := time.Now()
+		newSvc.Metadata.CreatedAt = now
+		newSvc.Metadata.UpdatedAt = now
+		services[name] = newSvc
+		res.WriteHeader(http.StatusNoContent)
 	case "DELETE":
 		delete(services, name)
 		res.WriteHeader(http.StatusNoContent)
-		return
 	case "PATCH":
 		editingsvc, ok := services[name]
 		if !ok {

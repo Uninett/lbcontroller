@@ -11,7 +11,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func reconfigService(c *cli.Context) error {
+func replaceService(c *cli.Context) error {
 
 	if len(c.Args()) != 0 {
 		return errors.New("too many args")
@@ -34,7 +34,7 @@ func reconfigService(c *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReconfigService(*svc, apiURL)
+	err = nlb.ReplaceService(*svc, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring service")
 	}
@@ -43,7 +43,7 @@ func reconfigService(c *cli.Context) error {
 	return nil
 }
 
-func reconfigFrontend(c *cli.Context) error {
+func replaceFrontend(c *cli.Context) error {
 	if len(c.Args()) != 0 {
 		return errors.New("too many args")
 	}
@@ -65,7 +65,7 @@ func reconfigFrontend(c *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReconfigFrontend(*fnt, apiURL)
+	err = nlb.ReplaceFrontend(*fnt, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring frontend")
 	}
