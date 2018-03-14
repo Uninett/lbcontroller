@@ -9,11 +9,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const jsonContent = "application/json"
+const (
+	jsonContent = "application/json"
 
-var (
-	servicePath  = "/service"
-	frontendPath = "/frontend"
+	servicePath  = "services"
+	frontendPath = "frontends"
 )
 
 //Message from/to the API endpoint, e.g.

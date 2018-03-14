@@ -164,17 +164,17 @@ func GetService(name, url string) (*Service, bool, error) {
 }
 
 //ReplaceService replace and exixting Service object.
-func ReplaceService(front Service, url string) error {
+func ReplaceService(front Service, url string) (string, error) {
 	url = svcURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
 	if err != nil {
-		return errors.Wrap(err, "error creatign http.Request")
+		return "", errors.Wrap(err, "error creatign http.Request")
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "error replacing Service %s", front.Metadata.Name)
+		return "", errors.Wrapf(err, "error replacing Service %s", front.Metadata.Name)
 	}
 
 	defer res.Body.Close()
@@ -182,12 +182,13 @@ func ReplaceService(front Service, url string) error {
 	if res.StatusCode != http.StatusNoContent {
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return errors.Wrapf(err, "error reading from API endpoint: %s", url)
+			return "", errors.Wrapf(err, "error reading from API endpoint: %s", url)
 		}
-		return errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
+		return "", errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
 	}
-
-	return nil
+	//the location header contains the full url of the new resource
+	location := res.Header.Get("Location")
+	return location, nil
 }
 
 //ReconfigService replace and exixting Service object, the new Service is retured.
@@ -245,5 +246,5 @@ func DeleteService(name, url string) error {
 }
 
 func svcURL(url string) string {
-	return url + "/" + "services"
+	return url + "/" + servicePath
 }

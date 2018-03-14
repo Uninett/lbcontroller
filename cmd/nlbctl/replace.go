@@ -34,11 +34,11 @@ func replaceService(c *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReplaceService(*svc, apiURL)
+	loc, err := nlb.ReplaceService(*svc, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring service")
 	}
-	fmt.Printf("service %s reconfigured\n", svc.Metadata.Name)
+	fmt.Printf("service %s reconfigured: %s\n", svc.Metadata.Name, loc)
 
 	return nil
 }
@@ -65,11 +65,11 @@ func replaceFrontend(c *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReplaceFrontend(*fnt, apiURL)
+	loc, err := nlb.ReplaceFrontend(*fnt, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring frontend")
 	}
-	fmt.Printf("frontend %s reconfigured\n", fnt.Metadata.Name)
+	fmt.Printf("frontend %s reconfigured: %s\n", fnt.Metadata.Name, loc)
 
 	return nil
 }

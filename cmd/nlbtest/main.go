@@ -130,6 +130,9 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 		newFront.Metadata.CreatedAt = now
 		newFront.Metadata.UpdatedAt = now
 		frontends[newFront.Metadata.Name] = newFront
+
+		location := req.Host + "/" + name
+		res.Header().Add("Location", location)
 		res.WriteHeader(http.StatusNoContent)
 	case "DELETE":
 		delete(frontends, name)
@@ -153,14 +156,7 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 		frontend.Metadata.CreatedAt = editingFront.Metadata.CreatedAt
 		frontend.Metadata.UpdatedAt = time.Now()
 		frontends[name] = frontend
-		//outgoingJSON, err := json.Marshal(frontend)
-		//if err != nil {
-		//	log.Println(error.Error())
-		//	http.Error(res, err.Error(), http.StatusInternalServerError)
-		//	return
-		//}
-		//res.WriteHeader(http.StatusCreated)
-		//fmt.Fprint(res, string(outgoingJSON))
+
 		res.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -263,6 +259,9 @@ func editService(res http.ResponseWriter, req *http.Request) {
 		newSvc.Metadata.CreatedAt = now
 		newSvc.Metadata.UpdatedAt = now
 		services[name] = newSvc
+
+		location := req.Host + "/" + name
+		res.Header().Add("Location", location)
 		res.WriteHeader(http.StatusNoContent)
 	case "DELETE":
 		delete(services, name)
@@ -285,14 +284,7 @@ func editService(res http.ResponseWriter, req *http.Request) {
 		svc.Metadata.CreatedAt = editingsvc.Metadata.CreatedAt
 		svc.Metadata.UpdatedAt = time.Now()
 		services[name] = svc
-		//outgoingJSON, err := json.Marshal(svc)
-		//if err != nil {
-		//	log.Println(error.Error())
-		//	http.Error(res, err.Error(), http.StatusInternalServerError)
-		//	return
-		//}
-		//res.WriteHeader(http.StatusCreated)
-		//fmt.Fprint(res, string(outgoingJSON))
+
 		res.WriteHeader(http.StatusNoContent)
 	}
 }

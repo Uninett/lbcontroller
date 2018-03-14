@@ -115,29 +115,31 @@ func NewFrontend(front Frontend, url string) (*Metadata, error) {
 }
 
 //ReplaceFrontend replace and exixting frontend object, the new Frontend is retured.
-func ReplaceFrontend(front Frontend, url string) error {
+func ReplaceFrontend(front Frontend, url string) (string, error) {
 	url = frontURL(url)
 
 	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
 	if err != nil {
-		return errors.Wrap(err, "error creatign http.Request")
+		return "", errors.Wrap(err, "error creatign http.Request")
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "error replacing frontend %s/n", front.Metadata.Name)
+		return "", errors.Wrapf(err, "error replacing frontend %s/n", front.Metadata.Name)
 	}
 
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusNoContent {
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return errors.Wrapf(err, "error reading from API endpoint: %s", url)
+			return "", errors.Wrapf(err, "error reading from API endpoint: %s", url)
 		}
-		return errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
+		return "", errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
 	}
 
-	return nil
+	//the location header contains the full url of the new resource
+	location := res.Header.Get("Location")
+	return location, nil
 }
 
 //ReconfigFrontend replace and exixting frontend object, the new Frontend is retured.
@@ -233,5 +235,5 @@ func EditFrontend(front Frontend, url string, action action) (*Frontend, error) 
 }
 
 func frontURL(url string) string {
-	return url + "/" + "frontends"
+	return url + "/" + frontendPath
 }
