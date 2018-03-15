@@ -17,6 +17,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"log"
 	"os"
@@ -203,39 +204,66 @@ func (c *Controller) processItem(key string) error {
 	if err != nil {
 		return errors.Errorf("Error fetching object with key %s from store: %v", key, err)
 	}
-
-	if !exists {
-		//fmt.Printf("Deleted Service %s\n", obj.(*v1.Service).GetName())
-		//obj is nil
-		log.Printf("Deleted Service with key %s\n", key)
-		return nil
-	}
 	svc := obj.(*v1.Service)
 
-	sname := svc.GetName()
-	log.Printf("Sync/Add/Update for Service %s\n", sname)
+	//if not a loadBalancer service we dont care
+	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+		return nil
+	}
 
-	if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
-		log.Printf("service %s of type %s\n", sname, svc.Spec.Type)
-		lbSvc, found, err := nlb.GetService(sname, lbendpoint+"/services")
+	log.Printf("Sync/Add/Update for Service %s\n", svc.Name)
+	//get the load balancer service name
+	//the name is cluster-namespace-servicename-protocol
+	//e.g. nird-ns9999k-mysql-tcp
+	cluster := "nird" //TODO get this from env
+	ns := svc.Namespace
+	name := svc.Name
+	tcpKey := strings.Join([]string{cluster, ns, name, "tcp"}, "-")
+	udpKey := strings.Join([]string{cluster, ns, name, "udp"}, "-")
+
+	//is the service configured for TCP, UDP or both?
+	var udpProt, tcpProt bool
+	for _, p := range svc.Spec.Ports {
+		switch p.Protocol {
+		case v1.ProtocolUDP:
+			udpProt = true
+		case v1.ProtocolTCP:
+			tcpProt = true
+		}
+	}
+
+	if !exists { //delete the service(s)
+		if tcpProt {
+			log.Printf("Deleting Service with key %s\n", tcpKey)
+			err := nlb.DeleteService(tcpKey, lbendpoint)
+			if err != nil {
+				return errors.Wrapf(err, "ERROR deleting service with key %s\n", tcpKey)
+			}
+			log.Printf("Deleted Service with key %s\n", tcpKey)
+		}
+		if udpProt {
+			log.Printf("Deleting Service with key %s\n", udpKey)
+			err := nlb.DeleteService(udpKey, lbendpoint)
+			if err != nil {
+				return errors.Wrapf(err, "ERROR deleting service with key %s\n", udpKey)
+			}
+			log.Printf("Deleted Service with key %s\n", udpKey)
+		}
+		return nil
+	}
+
+	//createor update the service
+	if tcpProt {
+
+		lbSvc, found, err := nlb.GetService(name, lbendpoint)
 		if err != nil {
 			log.Println("ERROR: ", err)
-			return errors.Wrap(err, "Error getting list of load balancer services")
+			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
 		}
-		fmt.Printf("Service received: %v\n", lbSvc)
 
-		//create the service, get the frontend, populate the service.status.loadBalancer.ingress
-		/*
-			get the lbservice, the name should be namespace.service
-			if not present create a new lbservice.
-				first chech if the k8service has a loadBalancerIP set, if yes
-					first create a frontend with that IP and referencr it
-					in the lbservice json object
-				create a new lbservice
-		*/
-		if !found {
+		if !found { //new service
 			lbSvc.Type = nlb.TCP
-			lbSvc.Metadata.Name = sname
+			lbSvc.Metadata.Name = name
 			lbSvc.Config = nlb.TCPConfig{
 				Method: "least_conn",
 				//Ports: svc.Spec.Ports
@@ -246,12 +274,76 @@ func (c *Controller) processItem(key string) error {
 				return errors.Wrap(err, "Error creating a new load balancer service")
 			}
 			fmt.Println("created load balancer", meta)
-		} else { //update here?
-			/*
-			 */
+		} else { //recofigure
+			//do things here
 		}
 
 		fmt.Println("service status: ", svc.Status)
 	}
 	return nil
+}
+
+func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
+	svc := nlb.Service{}
+	svc.Type = nlb.ServiceType(strings.ToLower(protocol))
+	svc.Metadata.Name = key
+	cfg := nlb.TCPConfig{
+		Method:           "least_conn",
+		UpstreamMaxConns: 100,
+	}
+	cfg.Backends = backends
+	if len(ks.Spec.LoadBalancerSourceRanges) != 0 {
+		cfg.ACL = ks.Spec.LoadBalancerSourceRanges
+	}
+	if ks.Spec.HealthCheckNodePort != 0 {
+		cfg.HealthCheck = nlb.TCPHealthCheck{
+			Port:   ks.Spec.HealthCheckNodePort,
+			Send:   "healtz\n",
+			Expect: "^OK$",
+		}
+	}
+
+	cfg.Ports = make(map[string]int32)
+	for _, p := range ks.Spec.Ports {
+		if string(p.Protocol) == protocol {
+			port := fmt.Sprint(p.Port)
+			cfg.Ports[port] = int32(p.NodePort)
+		}
+	}
+
+	svc.Config = cfg
+
+	return svc
+}
+
+//TODO put this in a config file
+var backends = []nlb.Backend{
+	{
+		Host:  "tos-spw01.nird.sigma2.no",
+		Addrs: []string{"193.156.11.24", "2001:700:4a00:11::1024"},
+	},
+	{
+		Host:  "tos-spw02.nird.sigma2.no",
+		Addrs: []string{"193.156.11.25", "2001:700:4a00:11::1025"},
+	},
+	{
+		Host:  "tos-spw03.nird.sigma2.no",
+		Addrs: []string{"193.156.11.26", "2001:700:4a00:11::1026"},
+	},
+	{
+		Host:  "tos-spw04.nird.sigma2.no",
+		Addrs: []string{"193.156.11.27", "2001:700:4a00:11::1027"},
+	},
+	{
+		Host:  "tos-spw05.nird.sigma2.no",
+		Addrs: []string{"193.156.11.28", "2001:700:4a00:11::1028"},
+	},
+	{
+		Host:  "tos-spw06.nird.sigma2.no",
+		Addrs: []string{"193.156.11.29", "2001:700:4a00:11::1029"},
+	},
+	{
+		Host:  "tos-spw07.nird.sigma2.no",
+		Addrs: []string{"193.156.11.30", "2001:700:4a00:11::1030"},
+	},
 }

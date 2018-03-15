@@ -87,13 +87,13 @@ type Frontend struct {
 // 	"frontend": "foobar"
 // }
 type TCPConfig struct {
-	Method           string         `json:"method,omitempty"`
-	Ports            []uint16       `json:"ports,omitempty"`
-	Backends         []Backend      `json:"backends,omitempty"`
-	UpstreamMaxConns int            `json:"upstream_max_conns,omitempty"`
-	ACL              []string       `json:"acl,omitempty"`
-	HealthCheck      TCPHealthCheck `json:"health_check,omitempty"`
-	Frontend         string         `json:"frontend,omitempty"`
+	Method           string           `json:"method,omitempty"`
+	Ports            map[string]int32 `json:"ports,omitempty"`
+	Backends         []Backend        `json:"backends,omitempty"`
+	UpstreamMaxConns int              `json:"upstream_max_conns,omitempty"`
+	ACL              []string         `json:"acl,omitempty"`
+	HealthCheck      TCPHealthCheck   `json:"health_check,omitempty"`
+	Frontend         string           `json:"frontend,omitempty"`
 }
 
 //Type imprments the ServiceConfig interface
@@ -109,7 +109,7 @@ type Backend struct {
 
 // TCPHealthCheck is a loadbalancer heath check for TCP services
 type TCPHealthCheck struct {
-	Port   uint16 `json:"port,omitempty"`
+	Port   int32  `json:"port,omitempty"`
 	Send   string `json:"send,omitempty"`
 	Expect string `json:"expect,omitempty"`
 }
@@ -221,6 +221,7 @@ type ServiceType string
 // Known types of service
 const (
 	TCP              ServiceType = "tcp"
+	UDP              ServiceType = "udp"
 	TCPProxyProtocol ServiceType = "tcp_proxy_protocol"
 	SharedHTTP       ServiceType = "shared-http"
 	Mediasite        ServiceType = "mediasite"
