@@ -11,27 +11,12 @@ import (
 
 const (
 	jsonContent = "application/json"
+)
 
+var (
 	servicePath  = "services"
 	frontendPath = "frontends"
 )
-
-//Message from/to the API endpoint, e.g.
-//{
-//	"type": "frontend"
-//	"metadata": ...
-//	"config": {
-//		 "addresses": ["10.40.50.23","2001:700:fffd::23"]
-//	}
-//}
-//different types comes with different configurations.
-//The Config field should be unmarshalled after a Message is
-//in this way the type is known
-type Message struct {
-	Type     ServiceType     `json:"type,omitempty"`
-	Metadata Metadata        `json:"metadata,omitempty"`
-	Config   json.RawMessage `json:"config,omitempty"`
-}
 
 //Metadata of messages sent to the API
 //"metadata": {
@@ -46,26 +31,7 @@ type Metadata struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
-//FrontendConfig is the configuration of a Frontend object
-//{
-//	"type": "frontend"
-//	"metadata": ...
-//	"config": {
-//		 "addresses": ["10.40.50.23","2001:700:fffd::23"]
-//	}
-//}
-type FrontendConfig struct {
-	Addresses []string `json:"addresses,omitempty"`
-}
-
-//Frontend type for the load balancers
-type Frontend struct {
-	Type     string         `json:"type,omitempty"`
-	Metadata Metadata       `json:"metadata,omitempty"`
-	Config   FrontendConfig `json:"config,omitempty"`
-}
-
-// TCPConfig represent the configuration of a TCP load balanced service, e.g.:
+// Config represent the configuration of a TCP load balanced service, e.g.:
 // "config": {
 // 	"method": "least_conn",
 // 	"ports": [80, 443],
@@ -86,19 +52,14 @@ type Frontend struct {
 // },
 // 	"frontend": "foobar"
 // }
-type TCPConfig struct {
+type Config struct {
 	Method           string           `json:"method,omitempty"`
 	Ports            map[string]int32 `json:"ports,omitempty"`
 	Backends         []Backend        `json:"backends,omitempty"`
 	UpstreamMaxConns int              `json:"upstream_max_conns,omitempty"`
 	ACL              []string         `json:"acl,omitempty"`
-	HealthCheck      TCPHealthCheck   `json:"health_check,omitempty"`
+	HealthCheck      HealthCheck      `json:"health_check,omitempty"`
 	Frontend         string           `json:"frontend,omitempty"`
-}
-
-//Type imprments the ServiceConfig interface
-func (tcpp TCPConfig) Type() ServiceType {
-	return TCP
 }
 
 // Backend represents a backend in the loadbalancer configuration
@@ -107,80 +68,15 @@ type Backend struct {
 	Addrs []string `json:"addrs,omitempty"`
 }
 
-// TCPHealthCheck is a loadbalancer heath check for TCP services
-type TCPHealthCheck struct {
+// HealthCheck is a loadbalancer heath check for TCP services
+type HealthCheck struct {
 	Port   int32  `json:"port,omitempty"`
 	Send   string `json:"send,omitempty"`
 	Expect string `json:"expect,omitempty"`
 }
 
-// HTTPHealthCheck is a loadbalancer heath check for http services
-type HTTPHealthCheck struct {
-	URI        string `json:"uri,omitempty"`
-	StatusCode int    `json:"status_code,omitempty"`
-	Body       string `json:"body,omitempty"`
-}
-
-//SharedHTTPConfig represents the configuration of a TCP load balanced service, e.g.:
-//"config": {
-//	"names": ["site-a.example.com", "site-b.foo.org"],
-//	"sticky_backends": false,
-//	"backend_protocols": "both",
-//	"http": {
-//		"redirect_https": true,
-//		"backend_port": 8080,
-//		"health_check": {
-//			"uri": "/",
-//			 "status_code": 301
-//		}
-//	},
-//	"https": {
-//		 "private_key": "........",
-//		 "certificate": "........",
-//		 "backend_port": 8888,
-//		 "health_check": {
-//			 "uri": "/healthz",
-//			 "status_code": 200,
-//			 "body": "OK"
-//			}
-//	},
-//	"backends": [
-//		 "hostname1.example.com": {
-//			 "addrs": ["10.3.2.1", "2001:700:f00d::4"]
-//		 }
-//	]
-//}
-type SharedHTTPConfig struct {
-	Names            []string  `json:"names,omitempty"`
-	StickyBackends   bool      `json:"sticky_backends"`
-	BackendProtocols string    `json:"backend_protocols,omitempty"`
-	HTTP             HTTP      `json:"http,omitempty"`
-	HTTPS            HTTPS     `json:"https,omitempty"`
-	Backends         []Backend `json:"backends,omitempty"`
-}
-
-//HTTP is the HTTP part of a a SharedHTTPConfig
-type HTTP struct {
-	RedirectHTTPS bool            `json:"redirect_https"`
-	BackendPort   int             `json:"backend_port,omitempty"`
-	HealthCheck   HTTPHealthCheck `json:"health_check,omitempty"`
-}
-
-//HTTPS is the HTTPS part of a a SharedHTTPConfig
-type HTTPS struct {
-	PrivateKey  string          `json:"private_key,omitempty"`
-	Certificate string          `json:"certificate,omitempty"`
-	BackendPort int             `json:"backend_port,omitempty"`
-	HealthCheck HTTPHealthCheck `json:"health_check,omitempty"`
-}
-
-//Type imprlents the ServiceConfig interface
-func (shttp SharedHTTPConfig) Type() ServiceType {
-	return SharedHTTP
-}
-
 //prepare the http request and marchal the object to send
-func prepareRequest(obj interface{}, url, method string) (*http.Request, error) {
+func prepareRequest(obj Service, url, method string) (*http.Request, error) {
 	data, err := json.Marshal(obj)
 	if err != nil {
 		return nil, errors.Wrap(err, "error marshalling Frontend")
@@ -195,26 +91,6 @@ func prepareRequest(obj interface{}, url, method string) (*http.Request, error) 
 	return req, nil
 }
 
-//type of action to discriminate the http request when editing an object
-type action int
-
-const (
-	replace action = iota
-	reconfig
-	delete
-)
-
-/*
-type serviceType int
-
-const (
-	tcp serviceType = iota
-	tcpProxyProtocol
-	sharedHTTP
-	mediasite
-)
-*/
-
 // ServiceType represent the type of service offered by the load balancers.
 type ServiceType string
 
@@ -223,6 +99,4 @@ const (
 	TCP              ServiceType = "tcp"
 	UDP              ServiceType = "udp"
 	TCPProxyProtocol ServiceType = "tcp_proxy_protocol"
-	SharedHTTP       ServiceType = "shared-http"
-	Mediasite        ServiceType = "mediasite"
 )

@@ -7,56 +7,14 @@ import (
 
 	"github.com/koki/json"
 	"github.com/pkg/errors"
+	"k8s.io/api/core/v1"
 )
-
-// ServiceConfig holds one of the different configurations
-// of the services
-type ServiceConfig interface {
-	Type() ServiceType
-}
 
 //Service handled by the load balancers
 type Service struct {
-	Type     ServiceType   `json:"type,omitempty"`
-	Metadata Metadata      `json:"metadata,omitempty"`
-	Config   ServiceConfig `json:"config,omitempty"`
-}
-
-// UnmarshalJSON implements json.Unmarshaller interface
-func (svc *Service) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte("null")) {
-		return nil
-	}
-	msg := new(Message)
-	err := json.Unmarshal(data, msg)
-	if err != nil {
-		return errors.Wrap(err, "Error unmarsalling service")
-	}
-
-	switch msg.Type {
-	case TCP, TCPProxyProtocol:
-		tcpConf := new(TCPConfig)
-		err = json.Unmarshal(msg.Config, tcpConf)
-		if err != nil {
-			return errors.Wrap(err, "Error unmarsalling TCP service configuration")
-		}
-		svc.Type = msg.Type
-		svc.Metadata = msg.Metadata
-		svc.Config = tcpConf
-	case SharedHTTP:
-		httpConf := new(SharedHTTPConfig)
-		err = json.Unmarshal(msg.Config, httpConf)
-		if err != nil {
-			return errors.Wrap(err, "Error unmarsalling SharedHTTP service configuration")
-		}
-		svc.Type = msg.Type
-		svc.Metadata = msg.Metadata
-		svc.Config = httpConf
-	case Mediasite:
-		return errors.New("mediasite service unsupported")
-	}
-
-	return nil
+	Type     ServiceType `json:"type,omitempty"`
+	Metadata Metadata    `json:"metadata,omitempty"`
+	Config   Config      `json:"config,omitempty"`
 }
 
 //ListServices return a list of services
@@ -91,40 +49,6 @@ func ListServices(url string) ([]Service, error) {
 	res.Body.Close()
 
 	return svcs, nil
-}
-
-//NewService create a new service
-func NewService(svc Service, url string) (*Metadata, error) {
-
-	url = svcURL(url)
-	data, err := json.Marshal(svc)
-	if err != nil {
-		return nil, errors.Wrap(err, "error marshalling Service")
-	}
-	buf := bytes.NewBuffer(data)
-
-	res, err := http.Post(url, jsonContent, buf)
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating new service")
-	}
-
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
-	}
-
-	if res.StatusCode != http.StatusCreated {
-		return nil, errors.Errorf("API endpoint returned status %s, %s", res.Status, body)
-	}
-
-	ret := &Metadata{}
-	err = json.Unmarshal(body, ret)
-	if err != nil {
-		return nil, errors.Wrap(err, "error decoding Service object")
-	}
-	return ret, nil
 }
 
 //GetService get the configuration of the fronten specified by name, if the service
@@ -163,32 +87,48 @@ func GetService(name, url string) (*Service, bool, error) {
 	return ret, true, nil
 }
 
-//ReplaceService replace and exixting Service object.
-func ReplaceService(front Service, url string) (string, error) {
+//NewService create a new service
+func NewService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
+
 	url = svcURL(url)
-
-	req, err := prepareRequest(front, url+"/"+front.Metadata.Name, "PUT")
+	data, err := json.Marshal(svc)
 	if err != nil {
-		return "", errors.Wrap(err, "error creatign http.Request")
+		return nil, errors.Wrap(err, "error marshalling Service")
 	}
+	buf := bytes.NewBuffer(data)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := http.Post(url, jsonContent, buf)
 	if err != nil {
-		return "", errors.Wrapf(err, "error replacing Service %s", front.Metadata.Name)
+		return nil, errors.Wrap(err, "error creating new service")
 	}
 
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusNoContent {
-		body, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			return "", errors.Wrapf(err, "error reading from API endpoint: %s", url)
-		}
-		return "", errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
-	//the location header contains the full url of the new resource
+
+	if res.StatusCode != http.StatusCreated {
+		return nil, errors.Errorf("API endpoint returned status %s, %s", res.Status, body)
+	}
+
 	location := res.Header.Get("Location")
-	return location, nil
+	var ret []v1.LoadBalancerIngress
+
+	if location != "" {
+		ret, err = GetIngress(location)
+		if err != nil {
+			return nil, errors.Wrap(err, "error getting ingress form api")
+		}
+		return ret, nil
+	}
+
+	err = json.Unmarshal(body, &ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding Service object")
+	}
+	return ret, nil
 }
 
 //ReconfigService replace and exixting Service object, the new Service is retured.
@@ -247,4 +187,33 @@ func DeleteService(name, url string) error {
 
 func svcURL(url string) string {
 	return url + "/" + servicePath
+}
+
+//GetIngress retrives the k8s loadBalancerIngress from the specified url
+func GetIngress(url string) ([]v1.LoadBalancerIngress, error) {
+
+	//url = svcURL(url)
+	var ret []v1.LoadBalancerIngress
+
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error connecting to API endpoint to get ingress: %s", url)
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading from API endpoint to get ingress: %s", url)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
+	}
+
+	err = json.Unmarshal(body, &ret)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding LoadBalancerIngress object")
+	}
+
+	return ret, nil
 }

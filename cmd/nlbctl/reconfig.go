@@ -42,34 +42,3 @@ func reconfigService(c *cli.Context) error {
 
 	return nil
 }
-
-func reconfigFrontend(c *cli.Context) error {
-	if len(c.Args()) != 0 {
-		return errors.New("too many args")
-	}
-	var (
-		indata io.Reader
-		err    error
-	)
-	if resFile != "" {
-		indata, err = os.Open(resFile)
-		if err != nil {
-			return errors.Wrap(err, "error opening resourse file")
-		}
-	} else {
-		indata = os.Stdin
-	}
-	dec := json.NewDecoder(indata)
-	fnt := &nlb.Frontend{}
-	err = dec.Decode(fnt)
-	if err != nil {
-		return errors.Wrap(err, "error decoding json resource file")
-	}
-	err = nlb.ReconfigFrontend(*fnt, apiURL)
-	if err != nil {
-		return errors.Wrap(err, "error configuring frontend")
-	}
-	fmt.Printf("frontend %s reconfigured\n", fnt.Metadata.Name)
-
-	return nil
-}

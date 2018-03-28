@@ -62,12 +62,6 @@ func main() {
 			Usage: "Display one or many resources",
 			Subcommands: []cli.Command{
 				{
-					Name:    "frontend",
-					Usage:   "display frontend(s)",
-					Aliases: []string{"fnt"},
-					Action:  getFrontend,
-				},
-				{
 					Name:    "service",
 					Usage:   "display service(s)",
 					Aliases: []string{"svc"},
@@ -80,21 +74,6 @@ func main() {
 			Aliases: []string{"create"},
 			Usage:   " create new resources",
 			Subcommands: []cli.Command{
-				{
-					Name:      "frontend",
-					Usage:     "create a new frontend",
-					UsageText: "create a new frontend, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
-					Aliases:   []string{"fnt"},
-					Action:    newFrontend,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:        "file, f",
-							Value:       "",
-							Usage:       "json file containing the resourse description",
-							Destination: &resFile,
-						},
-					},
-				},
 				{
 					Name:      "service",
 					Usage:     "create a new service",
@@ -118,12 +97,6 @@ func main() {
 			Usage:   "Delete a resource",
 			Subcommands: []cli.Command{
 				{
-					Name:    "frontend",
-					Usage:   "delete a frontend",
-					Aliases: []string{"fnt"},
-					Action:  delFrontend,
-				},
-				{
 					Name:    "service",
 					Usage:   "delete a service",
 					Aliases: []string{"svc"},
@@ -136,21 +109,6 @@ func main() {
 			Aliases: []string{"reconfig", "rcfg"},
 			Usage:   "reconfigure a resource",
 			Subcommands: []cli.Command{
-				{
-					Name:      "frontend",
-					Usage:     "reconfigure an exixsting frontend",
-					UsageText: "reconfigure an exixsting frontend, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
-					Aliases:   []string{"fnt"},
-					Action:    reconfigFrontend,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:        "file, f",
-							Value:       "",
-							Usage:       "json file containing the resourse description",
-							Destination: &resFile,
-						},
-					},
-				},
 				{
 					Name:      "service",
 					Usage:     "reconfigure an exixsting service",
@@ -168,47 +126,10 @@ func main() {
 				},
 			},
 		},
-		{
-			Name:    "replace",
-			Aliases: []string{"replace", "rcfg"},
-			Usage:   "replace a resource",
-			Subcommands: []cli.Command{
-				{
-					Name:      "frontend",
-					Usage:     "replace an exixsting frontend",
-					UsageText: "replace an exixsting frontend, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
-					Aliases:   []string{"fnt"},
-					Action:    replaceFrontend,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:        "file, f",
-							Value:       "",
-							Usage:       "json file containing the resourse description",
-							Destination: &resFile,
-						},
-					},
-				},
-				{
-					Name:      "service",
-					Usage:     "replace an exixsting service",
-					UsageText: "replace an exixsting  service, if a file is specified witht the --file(-f) flag, the file is read. Oterwise stdin is used.",
-					Aliases:   []string{"svc"},
-					Action:    replaceService,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:        "file, f",
-							Value:       "",
-							Usage:       "json file containing the resourse description",
-							Destination: &resFile,
-						},
-					},
-				},
-			},
-		},
 	}
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("%+v\n", err)
 	}
 }

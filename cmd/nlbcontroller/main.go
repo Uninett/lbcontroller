@@ -215,11 +215,8 @@ func (c *Controller) processItem(key string) error {
 	//get the load balancer service name
 	//the name is cluster-namespace-servicename-protocol
 	//e.g. nird-ns9999k-mysql-tcp
-	cluster := "nird" //TODO get this from env
-	ns := svc.Namespace
-	name := svc.Name
-	tcpKey := strings.Join([]string{cluster, ns, name, "tcp"}, "-")
-	udpKey := strings.Join([]string{cluster, ns, name, "udp"}, "-")
+	tcpKey := strings.Join([]string{svc.ClusterName, svc.Namespace, svc.Name, "tcp"}, "-")
+	udpKey := strings.Join([]string{svc.ClusterName, svc.Namespace, svc.Name, "udp"}, "-")
 
 	//is the service configured for TCP, UDP or both?
 	var udpProt, tcpProt bool
@@ -252,10 +249,10 @@ func (c *Controller) processItem(key string) error {
 		return nil
 	}
 
-	//createor update the service
+	//createor or update the service
 	if tcpProt {
 
-		lbSvc, found, err := nlb.GetService(name, lbendpoint)
+		lbSvc, found, err := nlb.GetService(svc.Name, lbendpoint)
 		if err != nil {
 			log.Println("ERROR: ", err)
 			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
@@ -263,17 +260,19 @@ func (c *Controller) processItem(key string) error {
 
 		if !found { //new service
 			lbSvc.Type = nlb.TCP
-			lbSvc.Metadata.Name = name
-			lbSvc.Config = nlb.TCPConfig{
+			lbSvc.Metadata.Name = svc.Name
+			lbSvc.Config = nlb.Config{
 				Method: "least_conn",
 				//Ports: svc.Spec.Ports
 			}
-			meta, err := nlb.NewService(*lbSvc, lbendpoint+"/services")
+
+			ingress, err := nlb.NewService(*lbSvc, lbendpoint)
 			if err != nil {
 				//log.Println(err)
 				return errors.Wrap(err, "Error creating a new load balancer service")
 			}
-			fmt.Println("created load balancer", meta)
+			fmt.Printf("created load balancer for service %s ingress %v\n", tcpKey, ingress)
+			svc.Status.LoadBalancer.Ingress = ingress
 		} else { //recofigure
 			//do things here
 		}
@@ -287,7 +286,7 @@ func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
 	svc := nlb.Service{}
 	svc.Type = nlb.ServiceType(strings.ToLower(protocol))
 	svc.Metadata.Name = key
-	cfg := nlb.TCPConfig{
+	cfg := nlb.Config{
 		Method:           "least_conn",
 		UpstreamMaxConns: 100,
 	}
@@ -296,11 +295,9 @@ func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
 		cfg.ACL = ks.Spec.LoadBalancerSourceRanges
 	}
 	if ks.Spec.HealthCheckNodePort != 0 {
-		cfg.HealthCheck = nlb.TCPHealthCheck{
-			Port:   ks.Spec.HealthCheckNodePort,
-			Send:   "healtz\n",
-			Expect: "^OK$",
-		}
+		cfg.HealthCheck.Port = ks.Spec.HealthCheckNodePort
+	} else if len(ks.Spec.Ports) > 0 {
+		cfg.HealthCheck.Port = ks.Spec.Ports[0].NodePort
 	}
 
 	cfg.Ports = make(map[string]int32)
@@ -310,8 +307,6 @@ func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
 			cfg.Ports[port] = int32(p.NodePort)
 		}
 	}
-
-	svc.Config = cfg
 
 	return svc
 }
