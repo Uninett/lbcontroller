@@ -57,8 +57,7 @@ func main() {
 
 	app.Commands = []cli.Command{
 		{
-			Name: "get",
-			//Aliases: []string{"t"},
+			Name:  "get",
 			Usage: "Display one or many resources",
 			Subcommands: []cli.Command{
 				{
@@ -72,7 +71,7 @@ func main() {
 		{
 			Name:    "new",
 			Aliases: []string{"create"},
-			Usage:   " create new resources",
+			Usage:   "create new resources",
 			Subcommands: []cli.Command{
 				{
 					Name:      "service",

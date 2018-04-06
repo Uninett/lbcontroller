@@ -34,11 +34,11 @@ func reconfigService(c *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReconfigService(*svc, apiURL)
+	ingress, err := nlb.ReconfigService(*svc, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring service")
 	}
-	fmt.Printf("service %s reconfigured\n", svc.Metadata.Name)
+	fmt.Printf("service %s reconfigured\n%v\n", svc.Metadata.Name, ingress)
 
 	return nil
 }

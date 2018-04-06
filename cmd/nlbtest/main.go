@@ -56,6 +56,8 @@ func getService(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, error.Error(), http.StatusInternalServerError)
 		return
 	}
+	location := "http://" + req.Host + "/ingress"
+	res.Header().Add("Location", location)
 	fmt.Fprint(res, string(outgoingJSON))
 
 }
