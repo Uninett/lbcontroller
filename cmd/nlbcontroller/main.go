@@ -42,6 +42,7 @@ var (
 	// max retries for a queued object
 	maxRetries = 3
 	lbendpoint string
+	client     *kubernetes.Clientset
 )
 
 func main() {
@@ -62,7 +63,7 @@ func main() {
 	}
 	// creates the clientset
 	// creates the clientset
-	client, err := kubernetes.NewForConfig(config)
+	client, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,10 +73,12 @@ func main() {
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return client.CoreV1().Services(meta_v1.NamespaceAll).List(options)
+				//return client.CoreV1().Services(meta_v1.NamespaceAll).List(options)
+				return client.CoreV1().Services("default").List(options)
 			},
 			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return client.CoreV1().Services(meta_v1.NamespaceAll).Watch(options)
+				//return client.CoreV1().Services(meta_v1.NamespaceAll).Watch(options)
+				return client.CoreV1().Services("default").Watch(options)
 			},
 		},
 		&v1.Service{},
@@ -273,6 +276,7 @@ func (c *Controller) processItem(key string) error {
 			}
 			fmt.Printf("created load balancer for service %s ingress %v\n", tcpKey, ingress)
 			svc.Status.LoadBalancer.Ingress = ingress
+			persistUpdate(svc.Namespace, svc)
 		} else { //recofigure
 			//do things here
 		}
@@ -309,6 +313,14 @@ func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
 	}
 
 	return svc
+}
+
+func persistUpdate(namespace string, service *v1.Service) {
+	_, err := client.CoreV1().Services(service.Namespace).UpdateStatus(service)
+	if err != nil {
+
+		fmt.Println("error updating status:", err)
+	}
 }
 
 //TODO put this in a config file

@@ -31,7 +31,7 @@ func main() {
 	router.HandleFunc("/ingress", getIngress).Methods("GET")
 
 	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
-	http.ListenAndServe("127.0.0.1:8080", loggedRouter)
+	http.ListenAndServe(":8080", loggedRouter)
 }
 
 func getService(res http.ResponseWriter, req *http.Request) {

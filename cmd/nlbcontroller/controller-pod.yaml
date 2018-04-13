@@ -13,3 +13,17 @@ spec:
       - name: NLB_ENDPOINT
         value: "http://service-api.default:8080"
         #value: "http://172.17.0.4:8080"
+---
+#RBAC for the controller user to system:controller:service-controller
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: service-controller
+subjects:
+- kind: User
+  name: system:serviceaccount:default:default
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: system:controller:service-controller
+  apiGroup: rbac.authorization.k8s.io
