@@ -1,4 +1,4 @@
-# lbcontroller
+# lbcontroller (WIP)
 Kubernetes Loadbalancer service type controller to setup LB in Uninett Loadbalancers
 
 
