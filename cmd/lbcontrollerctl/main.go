@@ -32,8 +32,6 @@ package main
 import (
 	"log"
 	"os"
-
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -51,7 +49,7 @@ func main() {
 			Value:       "http://127.0.0.1:8080",
 			Usage:       "API endpoint",
 			Destination: &apiURL,
-			EnvVar:      "NLB_API",
+			EnvVar:      "lbcontroller_API",
 		},
 	}
 

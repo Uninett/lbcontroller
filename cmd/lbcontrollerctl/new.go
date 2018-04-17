@@ -5,13 +5,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/folago/nlb"
 	"github.com/koki/json"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
 )
 
-func reconfigService(c *cli.Context) error {
+func newService(c *cli.Context) error {
 
 	if len(c.Args()) != 0 {
 		return errors.New("too many args")
@@ -29,21 +27,21 @@ func reconfigService(c *cli.Context) error {
 		indata = os.Stdin
 	}
 	dec := json.NewDecoder(indata)
-	svc := &nlb.Service{}
+	svc := &lbcontroller.Service{}
 	err = dec.Decode(svc)
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReconfigService(*svc, apiURL)
+	meta, err := lbcontroller.NewService(*svc, apiURL)
 	if err != nil {
-		return errors.Wrap(err, "error configuring service")
+		return errors.Wrap(err, "error creating new service")
 	}
-	fmt.Printf("service %s reconfigured\n", svc.Metadata.Name)
+	fmt.Printf("service %s, created at %v\n", meta.Name, meta.CreatedAt)
 
 	return nil
 }
 
-func reconfigFrontend(c *cli.Context) error {
+func newFrontend(c *cli.Context) error {
 	if len(c.Args()) != 0 {
 		return errors.New("too many args")
 	}
@@ -60,16 +58,16 @@ func reconfigFrontend(c *cli.Context) error {
 		indata = os.Stdin
 	}
 	dec := json.NewDecoder(indata)
-	fnt := &nlb.Frontend{}
+	fnt := &lbcontroller.Frontend{}
 	err = dec.Decode(fnt)
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	err = nlb.ReconfigFrontend(*fnt, apiURL)
+	meta, err := lbcontroller.NewFrontend(*fnt, apiURL)
 	if err != nil {
-		return errors.Wrap(err, "error configuring frontend")
+		return errors.Wrap(err, "error creating new frontend")
 	}
-	fmt.Printf("frontend %s reconfigured\n", fnt.Metadata.Name)
+	fmt.Printf("frontend %s, created at %v\n", meta.Name, meta.CreatedAt)
 
 	return nil
 }

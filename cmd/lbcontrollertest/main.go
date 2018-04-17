@@ -11,14 +11,13 @@ import (
 
 	"github.com/koki/json"
 
-	"github.com/folago/nlb"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
 var (
-	frontends = map[string]nlb.Frontend{}
-	services  = map[string]nlb.Service{}
+	frontends = map[string]lbcontroller.Frontend{}
+	services  = map[string]lbcontroller.Service{}
 )
 
 func main() {
@@ -80,7 +79,7 @@ func listFrontends(res http.ResponseWriter, req *http.Request) {
 func newFrontend(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 
-	newFront := nlb.Frontend{}
+	newFront := lbcontroller.Frontend{}
 	decoder := json.NewDecoder(req.Body)
 	error := decoder.Decode(&newFront)
 	if error != nil {
@@ -118,7 +117,7 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "PUT":
 		delete(frontends, name)
-		newFront := nlb.Frontend{}
+		newFront := lbcontroller.Frontend{}
 		decoder := json.NewDecoder(req.Body)
 		error := decoder.Decode(&newFront)
 		if error != nil {
@@ -145,7 +144,7 @@ func editFrontends(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		frontend := nlb.Frontend{}
+		frontend := lbcontroller.Frontend{}
 		decoder := json.NewDecoder(req.Body)
 		error := decoder.Decode(&frontend)
 		if error != nil {
@@ -204,7 +203,7 @@ func listServices(res http.ResponseWriter, req *http.Request) {
 func newService(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 
-	newSvc := nlb.Service{}
+	newSvc := lbcontroller.Service{}
 	decoder := json.NewDecoder(req.Body)
 	error := decoder.Decode(&newSvc)
 	if error != nil {
@@ -247,7 +246,7 @@ func editService(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 		delete(services, name)
-		newSvc := nlb.Service{}
+		newSvc := lbcontroller.Service{}
 		decoder := json.NewDecoder(req.Body)
 		error := decoder.Decode(&newSvc)
 		if error != nil {
@@ -273,7 +272,7 @@ func editService(res http.ResponseWriter, req *http.Request) {
 			fmt.Fprintf(res, "Service %s not found", name)
 			return
 		}
-		svc := nlb.Service{}
+		svc := lbcontroller.Service{}
 		decoder := json.NewDecoder(req.Body)
 		error := decoder.Decode(&svc)
 		if error != nil {

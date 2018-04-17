@@ -5,10 +5,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/folago/nlb"
 	"github.com/koki/json"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func replaceService(c *cli.Context) error {
@@ -29,12 +27,12 @@ func replaceService(c *cli.Context) error {
 		indata = os.Stdin
 	}
 	dec := json.NewDecoder(indata)
-	svc := &nlb.Service{}
+	svc := &lbcontroller.Service{}
 	err = dec.Decode(svc)
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	loc, err := nlb.ReplaceService(*svc, apiURL)
+	loc, err := lbcontroller.ReplaceService(*svc, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring service")
 	}
@@ -60,12 +58,12 @@ func replaceFrontend(c *cli.Context) error {
 		indata = os.Stdin
 	}
 	dec := json.NewDecoder(indata)
-	fnt := &nlb.Frontend{}
+	fnt := &lbcontroller.Frontend{}
 	err = dec.Decode(fnt)
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	loc, err := nlb.ReplaceFrontend(*fnt, apiURL)
+	loc, err := lbcontroller.ReplaceFrontend(*fnt, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error configuring frontend")
 	}

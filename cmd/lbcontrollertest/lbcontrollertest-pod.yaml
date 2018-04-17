@@ -2,13 +2,13 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nlbtest
+  name: lbcontrollertest
   labels:
-    app: nlbtest
+    app: lbcontrollertest
 spec:
   containers:
-  - name: nlbtest
-    image: nlbtest:latest
+  - name: lbcontrollertest
+    image: lbcontrollertest:latest
     imagePullPolicy: Never
 ---
 apiVersion: v1
@@ -20,16 +20,16 @@ spec:
   - port: 8080
     targetPort: 8080
   selector:
-    app: nlbtest
+    app: lbcontrollertest
 ---
 apiVersion: extensions/v1beta1
 kind: NetworkPolicy
 metadata:
-  name: nlbtest
+  name: lbcontrollertest
 spec:
   podSelector:
     matchLabels:
-      app: nlbtest
+      app: lbcontrollertest
   ingress:
     - from:
       - podSelector:

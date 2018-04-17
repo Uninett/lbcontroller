@@ -23,8 +23,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/folago/nlb"
 	"github.com/pkg/errors"
+	"github.com/uninett/lbcontroller"
 
 	"k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,10 +48,10 @@ func main() {
 	flag.Parse()
 
 	//check is we have a load balancer endpoint
-	lbendpoint = os.Getenv("NLB_ENDPOINT")
+	lbendpoint = os.Getenv("lbcontroller_ENDPOINT")
 	if len(lbendpoint) == 0 {
 
-		log.Fatalln("No load balancer endpoint defined, NLB_ENDPOINT not set in environment")
+		log.Fatalln("No load balancer endpoint defined, lbcontroller_ENDPOINT not set in environment")
 	}
 	log.Printf("Load balancer endpoint: %s\n", lbendpoint)
 
@@ -235,7 +235,7 @@ func (c *Controller) processItem(key string) error {
 	if !exists { //delete the service(s)
 		if tcpProt {
 			log.Printf("Deleting Service with key %s\n", tcpKey)
-			err := nlb.DeleteService(tcpKey, lbendpoint)
+			err := lbcontroller.DeleteService(tcpKey, lbendpoint)
 			if err != nil {
 				return errors.Wrapf(err, "ERROR deleting service with key %s\n", tcpKey)
 			}
@@ -243,7 +243,7 @@ func (c *Controller) processItem(key string) error {
 		}
 		if udpProt {
 			log.Printf("Deleting Service with key %s\n", udpKey)
-			err := nlb.DeleteService(udpKey, lbendpoint)
+			err := lbcontroller.DeleteService(udpKey, lbendpoint)
 			if err != nil {
 				return errors.Wrapf(err, "ERROR deleting service with key %s\n", udpKey)
 			}
@@ -255,20 +255,20 @@ func (c *Controller) processItem(key string) error {
 	//createor update the service
 	if tcpProt {
 
-		lbSvc, found, err := nlb.GetService(name, lbendpoint)
+		lbSvc, found, err := lbcontroller.GetService(name, lbendpoint)
 		if err != nil {
 			log.Println("ERROR: ", err)
 			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
 		}
 
 		if !found { //new service
-			lbSvc.Type = nlb.TCP
+			lbSvc.Type = lbcontroller.TCP
 			lbSvc.Metadata.Name = name
-			lbSvc.Config = nlb.TCPConfig{
+			lbSvc.Config = lbcontroller.TCPConfig{
 				Method: "least_conn",
 				//Ports: svc.Spec.Ports
 			}
-			meta, err := nlb.NewService(*lbSvc, lbendpoint+"/services")
+			meta, err := lbcontroller.NewService(*lbSvc, lbendpoint+"/services")
 			if err != nil {
 				//log.Println(err)
 				return errors.Wrap(err, "Error creating a new load balancer service")
@@ -283,11 +283,11 @@ func (c *Controller) processItem(key string) error {
 	return nil
 }
 
-func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
-	svc := nlb.Service{}
-	svc.Type = nlb.ServiceType(strings.ToLower(protocol))
+func newlbcontrollerService(ks v1.Service, key, protocol string) lbcontroller.Service {
+	svc := lbcontroller.Service{}
+	svc.Type = lbcontroller.ServiceType(strings.ToLower(protocol))
 	svc.Metadata.Name = key
-	cfg := nlb.TCPConfig{
+	cfg := lbcontroller.TCPConfig{
 		Method:           "least_conn",
 		UpstreamMaxConns: 100,
 	}
@@ -296,7 +296,7 @@ func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
 		cfg.ACL = ks.Spec.LoadBalancerSourceRanges
 	}
 	if ks.Spec.HealthCheckNodePort != 0 {
-		cfg.HealthCheck = nlb.TCPHealthCheck{
+		cfg.HealthCheck = lbcontroller.TCPHealthCheck{
 			Port:   ks.Spec.HealthCheckNodePort,
 			Send:   "healtz\n",
 			Expect: "^OK$",
@@ -317,7 +317,7 @@ func newNlbService(ks v1.Service, key, protocol string) nlb.Service {
 }
 
 //TODO put this in a config file
-var backends = []nlb.Backend{
+var backends = []lbcontroller.Backend{
 	{
 		Host:  "tos-spw01.nird.sigma2.no",
 		Addrs: []string{"193.156.11.24", "2001:700:4a00:11::1024"},

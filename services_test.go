@@ -1,4 +1,4 @@
-package nlb
+package lbcontroller
 
 import (
 	"bytes"

@@ -7,9 +7,9 @@ metadata:
 spec:
   containers:
   - name: l4lb
-    image: nlbcontroller:latest
+    image: lbcontrollercontroller:latest
     imagePullPolicy: Never
     env:
-      - name: NLB_ENDPOINT
+      - name: lbcontroller_ENDPOINT
         value: "http://service-api.default:8080"
         #value: "http://172.17.0.4:8080"

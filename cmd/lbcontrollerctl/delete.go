@@ -1,10 +1,6 @@
 package main
 
-import (
-	"github.com/folago/nlb"
-	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
-)
+import "github.com/pkg/errors"
 
 func delService(c *cli.Context) error {
 	args := c.Args()
@@ -18,7 +14,7 @@ func delService(c *cli.Context) error {
 
 	if len(args) == 1 {
 		name := args[0]
-		err := nlb.DeleteService(name, apiURL)
+		err := lbcontroller.DeleteService(name, apiURL)
 		if err != nil {
 			return errors.Wrapf(err, "error deleting service %s", name)
 		}
@@ -38,7 +34,7 @@ func delFrontend(c *cli.Context) error {
 
 	if len(args) == 1 {
 		name := args[0]
-		err := nlb.DeleteFrontend(name, apiURL)
+		err := lbcontroller.DeleteFrontend(name, apiURL)
 		if err != nil {
 			return errors.Wrapf(err, "error deleting frontend %s", name)
 		}
