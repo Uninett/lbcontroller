@@ -1,17 +1,19 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: l4lb
+  name: lbcontroller
   labels:
     app: controller
 spec:
   containers:
-  - name: l4lb
-    image: lbcontrollercontroller:latest
+  - name: lbcontroller
+    image: lbcontroller:latest
     imagePullPolicy: Never
     env:
       - name: lbcontroller_ENDPOINT
         value: "http://service-api.default:8080"
+      - name: lbcontroller_CLUSTER
+        value: "nird"
         #value: "http://172.17.0.4:8080"
 ---
 #RBAC for the controller user to system:controller:service-controller

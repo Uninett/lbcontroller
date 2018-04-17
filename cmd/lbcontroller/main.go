@@ -40,9 +40,10 @@ import (
 
 var (
 	// max retries for a queued object
-	maxRetries = 3
-	lbendpoint string
-	client     *kubernetes.Clientset
+	maxRetries  = 3
+	lbendpoint  string
+	client      *kubernetes.Clientset
+	clusterName string
 )
 
 func main() {
@@ -55,6 +56,14 @@ func main() {
 		log.Fatalln("No load balancer endpoint defined, lbcontroller_ENDPOINT not set in environment")
 	}
 	log.Printf("Load balancer endpoint: %s\n", lbendpoint)
+
+	//check is we have a cluster name
+	clusterName = os.Getenv("lbcontroller_CLUSTER")
+	if len(clusterName) == 0 {
+
+		log.Fatalln("No cluster name defined, lbcontroller_CLUSTER not set in environment")
+	}
+	log.Printf("Cluster name: %s\n", clusterName)
 
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
@@ -207,19 +216,44 @@ func (c *Controller) processItem(key string) error {
 	if err != nil {
 		return errors.Errorf("Error fetching object with key %s from store: %v", key, err)
 	}
+	log.Printf("Sync/Add/Update for Service %s\n", key)
+	namespace, serviceName, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+	//get the load balancer service name
+	//the name is cluster-namespace-servicename-protocol
+	//e.g. nird-ns9999k-mysql-tcp
+	tcpKey := strings.Join([]string{clusterName, namespace, serviceName, "tcp"}, "-")
+	udpKey := strings.Join([]string{clusterName, namespace, serviceName, "udp"}, "-")
+
+	//delete the service(s), we have to delete all the
+	//services (tcp/udp) because we don't know anymore
+	//which protocols were configured.
+	//The price ot pay to make this cleaner is to abbandon statelessness.
+	if !exists {
+
+		log.Printf("Deleting Service with key %s\n", tcpKey)
+		err := lbcontroller.DeleteService(tcpKey, lbendpoint)
+		if err != nil {
+			return errors.Wrapf(err, "ERROR deleting service with key %s\n", tcpKey)
+		}
+		log.Printf("Deleted Service with key %s\n", tcpKey)
+		log.Printf("Deleting Service with key %s\n", udpKey)
+		err = lbcontroller.DeleteService(udpKey, lbendpoint)
+		if err != nil {
+			return errors.Wrapf(err, "ERROR deleting service with key %s\n", udpKey)
+		}
+		log.Printf("Deleted Service with key %s\n", udpKey)
+		return nil
+	}
+
 	svc := obj.(*v1.Service)
 
 	//if not a loadBalancer service we dont care
 	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 		return nil
 	}
-
-	log.Printf("Sync/Add/Update for Service %s\n", svc.Name)
-	//get the load balancer service name
-	//the name is cluster-namespace-servicename-protocol
-	//e.g. nird-ns9999k-mysql-tcp
-	tcpKey := strings.Join([]string{svc.ClusterName, svc.Namespace, svc.Name, "tcp"}, "-")
-	udpKey := strings.Join([]string{svc.ClusterName, svc.Namespace, svc.Name, "udp"}, "-")
 
 	//is the service configured for TCP, UDP or both?
 	var udpProt, tcpProt bool
@@ -232,30 +266,10 @@ func (c *Controller) processItem(key string) error {
 		}
 	}
 
-	if !exists { //delete the service(s)
-		if tcpProt {
-			log.Printf("Deleting Service with key %s\n", tcpKey)
-			err := lbcontroller.DeleteService(tcpKey, lbendpoint)
-			if err != nil {
-				return errors.Wrapf(err, "ERROR deleting service with key %s\n", tcpKey)
-			}
-			log.Printf("Deleted Service with key %s\n", tcpKey)
-		}
-		if udpProt {
-			log.Printf("Deleting Service with key %s\n", udpKey)
-			err := lbcontroller.DeleteService(udpKey, lbendpoint)
-			if err != nil {
-				return errors.Wrapf(err, "ERROR deleting service with key %s\n", udpKey)
-			}
-			log.Printf("Deleted Service with key %s\n", udpKey)
-		}
-		return nil
-	}
-
 	//createor or update the service
 	if tcpProt {
 
-		lbSvc, found, err := lbcontroller.GetService(svc.Name, lbendpoint)
+		lbSvc, found, err := lbcontroller.GetService(tcpKey, lbendpoint)
 		if err != nil {
 			log.Println("ERROR: ", err)
 			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
@@ -263,7 +277,7 @@ func (c *Controller) processItem(key string) error {
 
 		if !found { //new service
 			lbSvc.Type = lbcontroller.TCP
-			lbSvc.Metadata.Name = svc.Name
+			lbSvc.Metadata.Name = tcpKey
 			lbSvc.Config = lbcontroller.Config{
 				Method: "least_conn",
 				//Ports: svc.Spec.Ports
@@ -276,7 +290,38 @@ func (c *Controller) processItem(key string) error {
 			}
 			fmt.Printf("created load balancer for service %s ingress %v\n", tcpKey, ingress)
 			svc.Status.LoadBalancer.Ingress = ingress
-			persistUpdate(svc.Namespace, svc)
+			persistUpdate(namespace, svc)
+		} else { //recofigure
+			//do things here
+		}
+
+		fmt.Println("service status: ", svc.Status)
+	}
+
+	if udpProt {
+
+		lbSvc, found, err := lbcontroller.GetService(udpKey, lbendpoint)
+		if err != nil {
+			log.Println("ERROR: ", err)
+			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
+		}
+
+		if !found { //new service
+			lbSvc.Type = lbcontroller.UDP
+			lbSvc.Metadata.Name = udpKey
+			lbSvc.Config = lbcontroller.Config{
+				Method: "least_conn",
+				//Ports: svc.Spec.Ports
+			}
+
+			ingress, err := lbcontroller.NewService(*lbSvc, lbendpoint)
+			if err != nil {
+				//log.Println(err)
+				return errors.Wrap(err, "Error creating a new load balancer service")
+			}
+			fmt.Printf("created load balancer for service %s ingress %v\n", udpKey, ingress)
+			svc.Status.LoadBalancer.Ingress = ingress
+			persistUpdate(namespace, svc)
 		} else { //recofigure
 			//do things here
 		}

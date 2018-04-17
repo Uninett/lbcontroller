@@ -1,6 +1,6 @@
 FROM scratch
 
-COPY  lbcontrollercontroller .
+COPY  lbcontroller .
 
-ENTRYPOINT [ "/lbcontrollercontroller" ]
+ENTRYPOINT [ "/lbcontroller" ]
 CMD ["-logtostderr=true"]
