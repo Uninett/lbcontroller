@@ -11,13 +11,12 @@ import (
 
 	"github.com/koki/json"
 
-	"github.com/folago/nlb"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
 var (
-	services = map[string]nlb.Service{}
+	services = map[string]lbcontroller.Service{}
 )
 
 func main() {
@@ -79,7 +78,7 @@ func listServices(res http.ResponseWriter, req *http.Request) {
 func newService(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 
-	newSvc := nlb.Service{}
+	newSvc := lbcontroller.Service{}
 	decoder := json.NewDecoder(req.Body)
 	error := decoder.Decode(&newSvc)
 	if error != nil {
@@ -121,7 +120,7 @@ func editService(res http.ResponseWriter, req *http.Request) {
 			fmt.Fprintf(res, "Service %s not found", name)
 			return
 		}
-		svc := nlb.Service{}
+		svc := lbcontroller.Service{}
 		decoder := json.NewDecoder(req.Body)
 		error := decoder.Decode(&svc)
 		if error != nil {

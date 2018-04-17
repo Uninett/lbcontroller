@@ -6,17 +6,16 @@ import (
 
 	"text/tabwriter"
 
-	"github.com/folago/nlb"
 	"github.com/koki/json"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/uninett/lbcontroller"
 )
 
 func getService(c *cli.Context) error {
 	args := c.Args()
 
 	if len(args) == 0 { //get all
-		ret, err := nlb.ListServices(apiURL)
+		ret, err := lbcontroller.ListServices(apiURL)
 		if err != nil {
 			return errors.Wrap(err, "error getting resources")
 		}
@@ -25,7 +24,7 @@ func getService(c *cli.Context) error {
 
 	if len(args) == 1 { //get the first
 		name := args[0]
-		ret, found, err := nlb.GetService(name, apiURL)
+		ret, found, err := lbcontroller.GetService(name, apiURL)
 		if err != nil {
 			return errors.Wrap(err, "error getting resources")
 		}
@@ -42,7 +41,7 @@ func getService(c *cli.Context) error {
 	return nil
 }
 
-func printServiceList(servs []nlb.Service) {
+func printServiceList(servs []lbcontroller.Service) {
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 8, 8, 1, '\t', 0)
 	fmt.Fprintln(w, "SERVICES\tNAME\tTYPE")

@@ -1,9 +1,8 @@
 package main
 
 import (
-	"github.com/folago/nlb"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/uninett/lbcontroller"
 )
 
 func delService(c *cli.Context) error {
@@ -18,7 +17,7 @@ func delService(c *cli.Context) error {
 
 	if len(args) == 1 {
 		name := args[0]
-		err := nlb.DeleteService(name, apiURL)
+		err := lbcontroller.DeleteService(name, apiURL)
 		if err != nil {
 			return errors.Wrapf(err, "error deleting service %s", name)
 		}

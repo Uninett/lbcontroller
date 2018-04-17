@@ -5,10 +5,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/folago/nlb"
 	"github.com/koki/json"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/uninett/lbcontroller"
 )
 
 func newService(c *cli.Context) error {
@@ -29,12 +28,12 @@ func newService(c *cli.Context) error {
 		indata = os.Stdin
 	}
 	dec := json.NewDecoder(indata)
-	svc := &nlb.Service{}
+	svc := &lbcontroller.Service{}
 	err = dec.Decode(svc)
 	if err != nil {
 		return errors.Wrap(err, "error decoding json resource file")
 	}
-	ingress, err := nlb.NewService(*svc, apiURL)
+	ingress, err := lbcontroller.NewService(*svc, apiURL)
 	if err != nil {
 		return errors.Wrap(err, "error creating new service")
 	}

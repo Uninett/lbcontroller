@@ -1,6 +1,6 @@
 // +build ignore
 
-package nlb
+package lbcontroller
 
 import (
 	"bytes"
