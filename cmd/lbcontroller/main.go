@@ -71,7 +71,6 @@ func main() {
 		panic(err.Error())
 	}
 	// creates the clientset
-	// creates the clientset
 	client, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatal(err)
@@ -82,12 +81,12 @@ func main() {
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				//return client.CoreV1().Services(meta_v1.NamespaceAll).List(options)
-				return client.CoreV1().Services("default").List(options)
+				return client.CoreV1().Services(meta_v1.NamespaceAll).List(options)
+				//return client.CoreV1().Services("default").List(options)
 			},
 			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				//return client.CoreV1().Services(meta_v1.NamespaceAll).Watch(options)
-				return client.CoreV1().Services("default").Watch(options)
+				return client.CoreV1().Services(meta_v1.NamespaceAll).Watch(options)
+				//return client.CoreV1().Services("default").Watch(options)
 			},
 		},
 		&v1.Service{},
@@ -245,6 +244,9 @@ func (c *Controller) processItem(key string) error {
 			return errors.Wrapf(err, "ERROR deleting service with key %s\n", udpKey)
 		}
 		log.Printf("Deleted Service with key %s\n", udpKey)
+
+		//TODO delete network policy as well
+
 		return nil
 	}
 
@@ -255,79 +257,62 @@ func (c *Controller) processItem(key string) error {
 		return nil
 	}
 
-	//is the service configured for TCP, UDP or both?
-	var udpProt, tcpProt bool
+	//createor or update the service
+
+	//is the service configured for TCP, UDP?
+	var tcpProt bool
 	for _, p := range svc.Spec.Ports {
 		switch p.Protocol {
 		case v1.ProtocolUDP:
-			udpProt = true
+			break
 		case v1.ProtocolTCP:
 			tcpProt = true
+			break
 		}
 	}
 
-	//createor or update the service
+	var (
+		lbKey  string
+		lbType lbcontroller.ServiceType
+	)
 	if tcpProt {
+		lbKey = tcpKey
+		lbType = lbcontroller.TCP
 
-		lbSvc, found, err := lbcontroller.GetService(tcpKey, lbendpoint)
-		if err != nil {
-			log.Println("ERROR: ", err)
-			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
-		}
-
-		if !found { //new service
-			lbSvc.Type = lbcontroller.TCP
-			lbSvc.Metadata.Name = tcpKey
-			lbSvc.Config = lbcontroller.Config{
-				Method: "least_conn",
-				//Ports: svc.Spec.Ports
-			}
-
-			ingress, err := lbcontroller.NewService(*lbSvc, lbendpoint)
-			if err != nil {
-				//log.Println(err)
-				return errors.Wrap(err, "Error creating a new load balancer service")
-			}
-			fmt.Printf("created load balancer for service %s ingress %v\n", tcpKey, ingress)
-			svc.Status.LoadBalancer.Ingress = ingress
-			persistUpdate(namespace, svc)
-		} else { //recofigure
-			//do things here
-		}
-
-		fmt.Println("service status: ", svc.Status)
+	} else {
+		lbKey = udpKey
+		lbType = lbcontroller.UDP
 	}
 
-	if udpProt {
-
-		lbSvc, found, err := lbcontroller.GetService(udpKey, lbendpoint)
-		if err != nil {
-			log.Println("ERROR: ", err)
-			return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
-		}
-
-		if !found { //new service
-			lbSvc.Type = lbcontroller.UDP
-			lbSvc.Metadata.Name = udpKey
-			lbSvc.Config = lbcontroller.Config{
-				Method: "least_conn",
-				//Ports: svc.Spec.Ports
-			}
-
-			ingress, err := lbcontroller.NewService(*lbSvc, lbendpoint)
-			if err != nil {
-				//log.Println(err)
-				return errors.Wrap(err, "Error creating a new load balancer service")
-			}
-			fmt.Printf("created load balancer for service %s ingress %v\n", udpKey, ingress)
-			svc.Status.LoadBalancer.Ingress = ingress
-			persistUpdate(namespace, svc)
-		} else { //recofigure
-			//do things here
-		}
-
-		fmt.Println("service status: ", svc.Status)
+	//check if the service exists on the loadbalncers
+	lbSvc, found, err := lbcontroller.GetService(tcpKey, lbendpoint)
+	if err != nil {
+		log.Println("ERROR: ", err)
+		return errors.Wrapf(err, "Error gettig load balancer service %s from endpoint", tcpKey)
 	}
+
+	if !found { //new service
+		lbSvc.Type = lbType
+		lbSvc.Metadata.Name = lbKey
+		lbSvc.Config = lbcontroller.Config{
+			Method: "least_conn",
+			//Ports: svc.Spec.Ports
+		}
+
+		ingress, err := lbcontroller.NewService(*lbSvc, lbendpoint)
+		if err != nil {
+			//log.Println(err)
+			return errors.Wrap(err, "Error creating a new load balancer service")
+		}
+		fmt.Printf("created load balancer for service %s ingress %v\n", lbKey, ingress)
+		svc.Status.LoadBalancer.Ingress = ingress
+		persistUpdate(namespace, svc)
+	} else { //recofigure
+		//do things here
+	}
+
+	fmt.Println("service status: ", svc.Status)
+
 	return nil
 }
 

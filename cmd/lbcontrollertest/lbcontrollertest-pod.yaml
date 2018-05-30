@@ -34,7 +34,7 @@ spec:
     - from:
       - podSelector:
           matchLabels:
-            pp: controller
+            app: controller
       ports:
         - protocol: TCP
           port: 8080
