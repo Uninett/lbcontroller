@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/pkg/errors"
 	"github.com/uninett/lbcontroller"
+	"github.com/urfave/cli"
 )
 
 func delService(c *cli.Context) error {

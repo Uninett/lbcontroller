@@ -8,6 +8,7 @@ import (
 	"github.com/koki/json"
 	"github.com/pkg/errors"
 	"github.com/uninett/lbcontroller"
+	"github.com/urfave/cli"
 )
 
 func newService(c *cli.Context) error {
