@@ -1,78 +1,85 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	//"github.com/koki/json"
 	"k8s.io/apimachinery/pkg/util/json"
+
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
+	"k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type Controller struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
-	Spec              ControllerSpec   `json:"spec"`
-	Status            ControllerStatus `json:"status"`
-}
-
-type ControllerSpec struct {
-	Message string `json:"message"`
-}
-
-type ControllerStatus struct {
-	Replicas  int `json:"replicas"`
-	Succeeded int `json:"succeeded"`
-}
-
+//SyncRequest is the request from the metacontroller
 type SyncRequest struct {
-	Parent   Controller          `json:"parent"`
-	Children SyncRequestChildren `json:"children"`
+	Controller  RawMessage                                `json:"controller"`
+	Service     v1.Service                                `json:"object"`
+	Attachments map[string]map[string]netv1.NetworkPolicy `json:"attachments"`
 }
 
-type SyncRequestChildren struct {
-	Pods map[string]*v1.Pod `json:"Pod.v1"`
-}
-
+//SyncResponse is the response to the metacontroller
 type SyncResponse struct {
-	Status   ControllerStatus `json:"status"`
-	Children []runtime.Object `json:"children"`
+	Labels      map[string]string     `json:"labels"`
+	Annotations map[string]string     `json:"annotations"`
+	Attachments []netv1.NetworkPolicy `json:"attachments"`
 }
 
 func sync(request *SyncRequest) (*SyncResponse, error) {
 	response := &SyncResponse{}
+	response.Labels = make(map[string]string)
+	response.Annotations = make(map[string]string)
+	response.Attachments = make([]netv1.NetworkPolicy, 0, 1)
 
-	// Compute status based on latest observed state.
-	for _, pod := range request.Children.Pods {
-		response.Status.Replicas += 1
-		if pod.Status.Phase == v1.PodSucceeded {
-			response.Status.Succeeded += 1
-		}
+	if request.Service.Spec.Type != v1.ServiceTypeLoadBalancer {
+		fmt.Println("not a loadbalancer service")
+		return response, nil
 	}
 
-	// Generate desired children.
-	pod := &v1.Pod{
+	//find the status of the load balancer
+	fmt.Printf("TODO: find status of laod balancer for service %s\n", request.Service.Name)
+
+	fmt.Println("TODO: add load balancers")
+
+	fmt.Println("TODO: get annotations from the loadbalancers API")
+
+	fmt.Println("TODO: generate NetworkPolicy")
+
+	// Generate desired NetworkPolicy
+	netpol := netv1.NetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
+			APIVersion: "networking.k8s.io/v1",
+			Kind:       "NetworkPolicy",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: request.Parent.Name,
+			Name: request.Service.Name + "-lb",
 		},
-		Spec: v1.PodSpec{
-			RestartPolicy: v1.RestartPolicyOnFailure,
-			Containers: []v1.Container{
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			Ingress: []netv1.NetworkPolicyIngressRule{
 				{
-					Name:    "hello",
-					Image:   "busybox",
-					Command: []string{"echo", request.Parent.Spec.Message},
+					Ports: []netv1.NetworkPolicyPort{
+						{
+							//Protocol: &v1.Protocol("TCP"),
+						},
+					},
+					From: []netv1.NetworkPolicyPeer{},
 				},
 			},
+			//Egress:      {},
+			//PolicyTypes: {},
 		},
 	}
-	response.Children = append(response.Children, pod)
+	response.Labels["this"] = "that"
+	response.Annotations["these"] = "those"
+	response.Attachments = append(response.Attachments, netpol)
 
 	return response, nil
 }
@@ -85,6 +92,7 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	request := &SyncRequest{}
 	if err := json.Unmarshal(body, request); err != nil {
+		fmt.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -94,7 +102,9 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, err = json.Marshal(&response)
+	fmt.Println(string(body))
 	if err != nil {
+		fmt.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +113,30 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/sync", syncHandler)
+	router := mux.NewRouter()
+	router.HandleFunc("/sync", syncHandler).Methods("POST")
+	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
+	log.Fatal(http.ListenAndServe(":8080", loggedRouter))
+}
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+// RawMessage is a raw encoded JSON value.
+// It implements Marshaler and Unmarshaler and can
+// be used to delay JSON decoding or precompute a JSON encoding.
+type RawMessage []byte
+
+// MarshalJSON returns m as the JSON encoding of m.
+func (m RawMessage) MarshalJSON() ([]byte, error) {
+	if m == nil {
+		return []byte("null"), nil
+	}
+	return m, nil
+}
+
+// UnmarshalJSON sets *m to a copy of data.
+func (m *RawMessage) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
+	}
+	*m = append((*m)[0:0], data...)
+	return nil
 }
