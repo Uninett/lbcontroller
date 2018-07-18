@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	//"github.com/koki/json"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/json"
 
 	"github.com/UNINETT/lbcontroller"
@@ -68,23 +69,25 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 		//TODO (gta) empty response?
 		return response, nil
 	}
+
 	//TCP or UDP?
-	var portProto v1.Protocol
+	var (
+		svcProto = v1.ProtocolTCP //default
+		svcPorts = []int32{}
+	)
+
 	for _, p := range request.Service.Spec.Ports {
-		switch p.Protocol {
-		case v1.ProtocolUDP:
-			portProto = v1.ProtocolUDP
-			break
+		if p.Protocol == v1.ProtocolUDP {
+			svcProto = v1.ProtocolUDP
 		}
-		//default
-		portProto = v1.ProtocolTCP
+		svcPorts = append(svcPorts, p.Port)
 	}
 
 	var (
 		namespace   = request.Service.Namespace
 		serviceName = request.Service.Name
 	)
-	serviceLbKey := strings.Join([]string{cluster, namespace, serviceName, string(portProto)}, "-")
+	serviceLbKey := strings.Join([]string{cluster, namespace, serviceName, string(svcProto)}, "-")
 
 	//find the status of the load balancer
 	log.Printf("finding status of laod balancer for service %s\n", request.Service.Name)
@@ -102,7 +105,7 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 
 	log.Println("add load balancer")
 
-	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(portProto))
+	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
 
 	ingress, err := lbcontroller.NewService(lbService, lbendpoint)
 	if err != nil {
@@ -110,17 +113,15 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 	}
 
 	log.Printf("Created loab balancer with ingress: %v\n", ingress)
-	//log.Println("TODO: get annotations from the loadbalancers API")
 
 	//TODO this annotation might be not optimal
 	for _, in := range ingress {
 		response.Annotations[in.Hostname] = in.IP
 	}
 
-	log.Println("TODO: generate NetworkPolicy")
+	log.Println("generate NetworkPolicy")
 
-	// Generate desired NetworkPolicy
-	netpol := newNetworkPolicy(request.Service.Name, ingress, portProto)
+	netpol := newNetworkPolicy(request.Service, ingress, svcProto, svcPorts)
 
 	response.Labels["LoadBalncer"] = "true" //TODO change this in something more useful?
 
@@ -184,6 +185,21 @@ func syncLoadBalancerService(v1.Service, lbcontroller.Service) error {
 	return nil
 }
 
+func getPortsProto(service v1.Service) ([]int32, v1.Protocol) {
+	var (
+		svcProto = v1.ProtocolTCP //default
+		svcPorts = []int32{}
+	)
+
+	for _, p := range service.Spec.Ports {
+		if p.Protocol == v1.ProtocolUDP {
+			svcProto = v1.ProtocolUDP
+		}
+		svcPorts = append(svcPorts, p.Port)
+	}
+	return svcPorts, svcProto
+}
+
 func newlbcontrollerService(ks v1.Service, key, protocol string) lbcontroller.Service {
 	svc := lbcontroller.Service{}
 	svc.Type = lbcontroller.ServiceType(strings.ToLower(protocol))
@@ -213,34 +229,51 @@ func newlbcontrollerService(ks v1.Service, key, protocol string) lbcontroller.Se
 	return svc
 }
 
-func newNetworkPolicy(name string, ingress []v1.LoadBalancerIngress, proto v1.Protocol) netv1.NetworkPolicy {
-	//TODO add ingress IPs
+func newNetworkPolicy(ksvc v1.Service, ingress []v1.LoadBalancerIngress, proto v1.Protocol, ports []int32) netv1.NetworkPolicy {
+
+	netPolPorts := []netv1.NetworkPolicyPort{}
+	for _, p := range ports {
+		port := netv1.NetworkPolicyPort{
+			Protocol: &proto,
+			Port: &intstr.IntOrString{
+				Type:   intstr.Int,
+				IntVal: p,
+			},
+		}
+		netPolPorts = append(netPolPorts, port)
+	}
+
+	netPolPeers := []netv1.NetworkPolicyPeer{}
+	for _, in := range ingress {
+		netin := netv1.NetworkPolicyPeer{
+			IPBlock: &netv1.IPBlock{
+				CIDR: in.IP, // TODO is this OK
+			},
+		}
+		netPolPeers = append(netPolPeers, netin)
+	}
+
 	netpol := netv1.NetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "networking.k8s.io/v1",
 			Kind:       "NetworkPolicy",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name + "-lb",
+			Name: ksvc.Name + "-lb",
 		},
 		Spec: netv1.NetworkPolicySpec{
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress},
 			PodSelector: metav1.LabelSelector{
-				//TODO
+				//TODO same as the service?
+				MatchLabels: ksvc.Spec.Selector,
 			},
-			//this need to be in a loop
 			Ingress: []netv1.NetworkPolicyIngressRule{
 				{
-					Ports: []netv1.NetworkPolicyPort{
-						{
-							Protocol: &proto,
-							//port:     1234,
-						},
-					},
-					From: []netv1.NetworkPolicyPeer{},
+					Ports: netPolPorts,
+					From:  netPolPeers,
 				},
 			},
 			//Egress:      {},
-			//PolicyTypes: {},
 		},
 	}
 	return netpol
