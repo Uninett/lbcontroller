@@ -1,22 +1,47 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	//"github.com/koki/json"
 	"k8s.io/apimachinery/pkg/util/json"
 
+	"github.com/UNINETT/lbcontroller"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const defaultCluster = "nird"
+
+var (
+	lbendpoint string
+	cluster    string
+)
+
+func main() {
+	lbendpoint = os.Getenv("lbcontroller_ENDPOINT")
+	if lbendpoint == "" {
+		panic("no load balancer endpoint defined")
+	}
+	cluster = os.Getenv("lbcontroller_CLUSTER")
+	if cluster == "" {
+		log.Printf("No clustrer name defined, defalt name is given: %s", defaultCluster)
+		cluster = defaultCluster
+	}
+	router := mux.NewRouter()
+	router.HandleFunc("/sync", syncHandler).Methods("POST")
+	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
+	log.Fatal(http.ListenAndServe(":8080", loggedRouter))
+}
 
 //SyncRequest is the request from the metacontroller
 type SyncRequest struct {
@@ -40,45 +65,65 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 
 	if request.Service.Spec.Type != v1.ServiceTypeLoadBalancer {
 		fmt.Println("not a loadbalancer service")
+		//TODO (gta) empty response?
 		return response, nil
 	}
+	//TCP or UDP?
+	var portProto v1.Protocol
+	for _, p := range request.Service.Spec.Ports {
+		switch p.Protocol {
+		case v1.ProtocolUDP:
+			portProto = v1.ProtocolUDP
+			break
+		}
+		//default
+		portProto = v1.ProtocolTCP
+	}
+
+	var (
+		namespace   = request.Service.Namespace
+		serviceName = request.Service.Name
+	)
+	serviceLbKey := strings.Join([]string{cluster, namespace, serviceName, string(portProto)}, "-")
 
 	//find the status of the load balancer
-	fmt.Printf("TODO: find status of laod balancer for service %s\n", request.Service.Name)
+	log.Printf("finding status of laod balancer for service %s\n", request.Service.Name)
+	_, found, err := lbcontroller.GetService(serviceLbKey, lbendpoint)
+	if err != nil {
+		return response, errors.Wrapf(err, "ERROR deleting service with key %s\n", serviceLbKey)
+	}
+	if found {
+		log.Printf("service %s present", serviceLbKey)
+		//Check if the two versions are different, if not do nothing.
+		//If they are different maybe betteto delete and recreate LB service.
+		//TODO synch the load balancer and the service
+		log.Println("TODO: synch the load balancer and the service")
+	}
 
-	fmt.Println("TODO: add load balancers")
+	log.Println("add load balancer")
 
-	fmt.Println("TODO: get annotations from the loadbalancers API")
+	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(portProto))
 
-	fmt.Println("TODO: generate NetworkPolicy")
+	ingress, err := lbcontroller.NewService(lbService, lbendpoint)
+	if err != nil {
+		return response, errors.Wrap(err, "Could not create load balancer service")
+	}
+
+	log.Printf("Created loab balancer with ingress: %v\n", ingress)
+	//log.Println("TODO: get annotations from the loadbalancers API")
+
+	//TODO this annotation might be not optimal
+	for _, in := range ingress {
+		response.Annotations[in.Hostname] = in.IP
+	}
+
+	log.Println("TODO: generate NetworkPolicy")
 
 	// Generate desired NetworkPolicy
-	netpol := netv1.NetworkPolicy{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "networking.k8s.io/v1",
-			Kind:       "NetworkPolicy",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: request.Service.Name + "-lb",
-		},
-		Spec: netv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{},
-			Ingress: []netv1.NetworkPolicyIngressRule{
-				{
-					Ports: []netv1.NetworkPolicyPort{
-						{
-							//Protocol: &v1.Protocol("TCP"),
-						},
-					},
-					From: []netv1.NetworkPolicyPeer{},
-				},
-			},
-			//Egress:      {},
-			//PolicyTypes: {},
-		},
-	}
-	response.Labels["this"] = "that"
-	response.Annotations["these"] = "those"
+	netpol := newNetworkPolicy(request.Service.Name, ingress, portProto)
+
+	response.Labels["LoadBalncer"] = "true" //TODO change this in something more useful?
+
 	response.Attachments = append(response.Attachments, netpol)
 
 	return response, nil
@@ -112,13 +157,6 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-func main() {
-	router := mux.NewRouter()
-	router.HandleFunc("/sync", syncHandler).Methods("POST")
-	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
-	log.Fatal(http.ListenAndServe(":8080", loggedRouter))
-}
-
 // RawMessage is a raw encoded JSON value.
 // It implements Marshaler and Unmarshaler and can
 // be used to delay JSON decoding or precompute a JSON encoding.
@@ -139,4 +177,103 @@ func (m *RawMessage) UnmarshalJSON(data []byte) error {
 	}
 	*m = append((*m)[0:0], data...)
 	return nil
+}
+
+func syncLoadBalancerService(v1.Service, lbcontroller.Service) error {
+	log.Printf("TODO syncLoadBalancerService")
+	return nil
+}
+
+func newlbcontrollerService(ks v1.Service, key, protocol string) lbcontroller.Service {
+	svc := lbcontroller.Service{}
+	svc.Type = lbcontroller.ServiceType(strings.ToLower(protocol))
+	svc.Metadata.Name = key
+	cfg := lbcontroller.Config{
+		Method:           "least_conn",
+		UpstreamMaxConns: 100,
+	}
+	cfg.Backends = backends
+	if len(ks.Spec.LoadBalancerSourceRanges) != 0 {
+		cfg.ACL = ks.Spec.LoadBalancerSourceRanges
+	}
+	if ks.Spec.HealthCheckNodePort != 0 {
+		cfg.HealthCheck.Port = ks.Spec.HealthCheckNodePort
+	} else if len(ks.Spec.Ports) > 0 {
+		cfg.HealthCheck.Port = ks.Spec.Ports[0].NodePort
+	}
+
+	cfg.Ports = make(map[string]int32)
+	for _, p := range ks.Spec.Ports {
+		if string(p.Protocol) == protocol {
+			port := fmt.Sprint(p.Port)
+			cfg.Ports[port] = int32(p.NodePort)
+		}
+	}
+
+	return svc
+}
+
+func newNetworkPolicy(name string, ingress []v1.LoadBalancerIngress, proto v1.Protocol) netv1.NetworkPolicy {
+	//TODO add ingress IPs
+	netpol := netv1.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "networking.k8s.io/v1",
+			Kind:       "NetworkPolicy",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name + "-lb",
+		},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				//TODO
+			},
+			//this need to be in a loop
+			Ingress: []netv1.NetworkPolicyIngressRule{
+				{
+					Ports: []netv1.NetworkPolicyPort{
+						{
+							Protocol: &proto,
+							//port:     1234,
+						},
+					},
+					From: []netv1.NetworkPolicyPeer{},
+				},
+			},
+			//Egress:      {},
+			//PolicyTypes: {},
+		},
+	}
+	return netpol
+}
+
+//TODO put this in a config file
+var backends = []lbcontroller.Backend{
+	{
+		Host:  "tos-spw01.nird.sigma2.no",
+		Addrs: []string{"193.156.11.24", "2001:700:4a00:11::1024"},
+	},
+	{
+		Host:  "tos-spw02.nird.sigma2.no",
+		Addrs: []string{"193.156.11.25", "2001:700:4a00:11::1025"},
+	},
+	{
+		Host:  "tos-spw03.nird.sigma2.no",
+		Addrs: []string{"193.156.11.26", "2001:700:4a00:11::1026"},
+	},
+	{
+		Host:  "tos-spw04.nird.sigma2.no",
+		Addrs: []string{"193.156.11.27", "2001:700:4a00:11::1027"},
+	},
+	{
+		Host:  "tos-spw05.nird.sigma2.no",
+		Addrs: []string{"193.156.11.28", "2001:700:4a00:11::1028"},
+	},
+	{
+		Host:  "tos-spw06.nird.sigma2.no",
+		Addrs: []string{"193.156.11.29", "2001:700:4a00:11::1029"},
+	},
+	{
+		Host:  "tos-spw07.nird.sigma2.no",
+		Addrs: []string{"193.156.11.30", "2001:700:4a00:11::1030"},
+	},
 }

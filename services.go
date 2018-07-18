@@ -78,7 +78,7 @@ func GetService(name, url string) (*Service, bool, error) {
 	case http.StatusOK:
 		location := res.Header.Get("Location")
 		if location != "" {
-			ingress, err = GetIngress(location)
+			ingress, err = getIngress(location)
 			if err != nil {
 				return nil, false, errors.Wrapf(err, "error getting ingress form api: %s", location)
 			}
@@ -127,7 +127,7 @@ func NewService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 	var ret []v1.LoadBalancerIngress
 
 	if location != "" {
-		ret, err = GetIngress(location)
+		ret, err = getIngress(location)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error getting ingress form api: %s", location)
 		}
@@ -174,7 +174,7 @@ func ReconfigService(svc Service, url string) ([]v1.LoadBalancerIngress, error) 
 	case http.StatusNoContent:
 		location := res.Header.Get("Location")
 		if location != "" {
-			ret, err = GetIngress(location)
+			ret, err = getIngress(location)
 			if err != nil {
 				return nil, errors.Wrapf(err, "error getting ingress form api: %s", location)
 			}
@@ -219,8 +219,8 @@ func svcURL(url string) string {
 	return url + "/" + servicePath
 }
 
-//GetIngress retrives the k8s loadBalancerIngress from the specified url
-func GetIngress(url string) ([]v1.LoadBalancerIngress, error) {
+//getIngress retrives the k8s loadBalancerIngress from the specified url
+func getIngress(url string) ([]v1.LoadBalancerIngress, error) {
 
 	//url = svcURL(url)
 	var ret []v1.LoadBalancerIngress
