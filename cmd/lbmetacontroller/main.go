@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,7 +11,7 @@ import (
 
 	//"github.com/koki/json"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/json"
+	//"k8s.io/apimachinery/pkg/util/json"
 
 	"github.com/UNINETT/lbcontroller"
 	"github.com/gorilla/handlers"
@@ -46,7 +47,7 @@ func main() {
 
 //SyncRequest is the request from the metacontroller
 type SyncRequest struct {
-	Controller  RawMessage                                `json:"controller"`
+	Controller  json.RawMessage                           `json:"controller"`
 	Service     v1.Service                                `json:"object"`
 	Attachments map[string]map[string]netv1.NetworkPolicy `json:"attachments"`
 }
@@ -66,7 +67,7 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 
 	if request.Service.Spec.Type != v1.ServiceTypeLoadBalancer {
 		fmt.Println("not a loadbalancer service")
-		//TODO (gta) empty response?
+		//TODO (gta) empty response? YES!
 		return response, nil
 	}
 
@@ -90,22 +91,40 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 	serviceLbKey := strings.Join([]string{cluster, namespace, serviceName, string(svcProto)}, "-")
 
 	//find the status of the load balancer
-	log.Printf("finding status of laod balancer for service %s\n", request.Service.Name)
-	_, found, err := lbcontroller.GetService(serviceLbKey, lbendpoint)
+	log.Printf("finding status of laod balancer for service %s...\n", request.Service.Name)
+	lbService, found, err := lbcontroller.GetService(serviceLbKey, lbendpoint)
 	if err != nil {
 		return response, errors.Wrapf(err, "ERROR deleting service with key %s\n", serviceLbKey)
 	}
 	if found {
-		log.Printf("service %s present", serviceLbKey)
+		log.Printf("...service %s present", serviceLbKey)
 		//Check if the two versions are different, if not do nothing.
 		//If they are different maybe betteto delete and recreate LB service.
 		//TODO synch the load balancer and the service
+		log.Println("TODO: check differences between load balancer and the service")
 		log.Println("TODO: synch the load balancer and the service")
+		log.Println("TODO: for now we just return the same service/config")
+		//Empty response destroys the network policy and deletes the
+		//annotations. And each service createdn triggers more than one
+		//sync, so we need to return the same.
+		for _, apiVersion := range request.Attachments {
+			for _, netpol := range apiVersion {
+				log.Println("############################################")
+				log.Printf("foud request.Attachment %s-%s\n", apiVersion, netpol)
+				log.Println("############################################")
+				response.Attachments = append(response.Attachments, netpol)
+			}
+		}
+		response.Annotations = request.Service.Annotations
+		response.Labels = request.Service.Labels
+
+		return response, nil
+
 	}
 
-	log.Println("add load balancer")
+	log.Println("...not found, add load balancer service")
 
-	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
+	lbService = newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
 
 	ingress, err := lbcontroller.NewService(lbService, lbendpoint)
 	if err != nil {
@@ -158,27 +177,27 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-// RawMessage is a raw encoded JSON value.
-// It implements Marshaler and Unmarshaler and can
-// be used to delay JSON decoding or precompute a JSON encoding.
-type RawMessage []byte
+// // RawMessage is a raw encoded JSON value.
+// // It implements Marshaler and Unmarshaler and can
+// // be used to delay JSON decoding or precompute a JSON encoding.
+// type RawMessage []byte
 
-// MarshalJSON returns m as the JSON encoding of m.
-func (m RawMessage) MarshalJSON() ([]byte, error) {
-	if m == nil {
-		return []byte("null"), nil
-	}
-	return m, nil
-}
+// // MarshalJSON returns m as the JSON encoding of m.
+// func (m RawMessage) MarshalJSON() ([]byte, error) {
+// 	if m == nil {
+// 		return []byte("null"), nil
+// 	}
+// 	return m, nil
+// }
 
-// UnmarshalJSON sets *m to a copy of data.
-func (m *RawMessage) UnmarshalJSON(data []byte) error {
-	if m == nil {
-		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
-	}
-	*m = append((*m)[0:0], data...)
-	return nil
-}
+// // UnmarshalJSON sets *m to a copy of data.
+// func (m *RawMessage) UnmarshalJSON(data []byte) error {
+// 	if m == nil {
+// 		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
+// 	}
+// 	*m = append((*m)[0:0], data...)
+// 	return nil
+// }
 
 func syncLoadBalancerService(v1.Service, lbcontroller.Service) error {
 	log.Printf("TODO syncLoadBalancerService")
@@ -247,7 +266,7 @@ func newNetworkPolicy(ksvc v1.Service, ingress []v1.LoadBalancerIngress, proto v
 	for _, in := range ingress {
 		netin := netv1.NetworkPolicyPeer{
 			IPBlock: &netv1.IPBlock{
-				CIDR: in.IP, // TODO is this OK
+				CIDR: in.IP + "/32", // TODO is this OK
 			},
 		}
 		netPolPeers = append(netPolPeers, netin)

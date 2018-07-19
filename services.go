@@ -54,43 +54,43 @@ func ListServices(url string) ([]Service, error) {
 
 //GetService get the configuration of the fronten specified by name, if the service
 //is found GetService returnns a true boolean value as well
-func GetService(name, url string) (*Service, bool, error) {
+func GetService(name, url string) (Service, bool, error) {
 
 	url = svcURL(url)
-	ret := &Service{}
+	ret := Service{}
 
 	res, err := http.Get(url + "/" + name)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "error connecting to API endpoint: %s", url)
+		return ret, false, errors.Wrapf(err, "error connecting to API endpoint: %s", url)
 	}
 	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "error reading from API endpoint: %s", url)
+		return ret, false, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 
 	var ingress []v1.LoadBalancerIngress
 	//handle stautus 200 and 404
 	switch res.StatusCode {
 	case http.StatusNotFound:
-		return &Service{}, false, nil
+		return ret, false, nil
 	case http.StatusOK:
 		location := res.Header.Get("Location")
 		if location != "" {
 			ingress, err = getIngress(location)
 			if err != nil {
-				return nil, false, errors.Wrapf(err, "error getting ingress form api: %s", location)
+				return ret, false, errors.Wrapf(err, "error getting ingress form api: %s", location)
 			}
 		}
 
 	default:
-		return nil, false, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
+		return ret, false, errors.Errorf("error, returned status from API endpoint not supported: %s\n ", res.Status)
 	}
 
-	err = json.Unmarshal(body, ret)
+	err = json.Unmarshal(body, &ret)
 	if err != nil {
-		return nil, false, errors.Wrap(err, "error decoding Service object")
+		return ret, false, errors.Wrap(err, "error decoding Service object")
 	}
 	ret.Ingress = ingress
 
