@@ -97,8 +97,8 @@ func GetService(name, url string) (Service, bool, error) {
 	return ret, true, nil
 }
 
-//NewService create a new service
-func NewService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
+//SyncService create or updates a new service
+func SyncService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 
 	url = svcURL(url)
 	data, err := json.Marshal(svc)
@@ -119,7 +119,10 @@ func NewService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
 	}
 
-	if res.StatusCode != http.StatusCreated {
+	switch res.StatusCode {
+	case http.StatusCreated, http.StatusOK:
+		//happy path
+	default:
 		return nil, errors.Errorf("API endpoint returned status %s, %s", res.Status, body)
 	}
 

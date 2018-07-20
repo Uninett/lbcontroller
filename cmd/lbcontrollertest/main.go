@@ -7,8 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/koki/json"
 
 	"github.com/gorilla/handlers"
@@ -87,21 +85,26 @@ func newService(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, error.Error(), http.StatusInternalServerError)
 		return
 	}
+	now := time.Now()
 	_, present := services[newSvc.Metadata.Name]
 	if present {
-		err := errors.Errorf("Service %s already present\n", newSvc.Metadata.Name)
-		log.Println(err)
-		http.Error(res, err.Error(), http.StatusInternalServerError)
-		return
+		//err := errors.Errorf("Service %s already present, updating\n", newSvc.Metadata.Name)
+		//log.Println(err)
+		log.Printf("Service %s already present, updating\n", newSvc.Metadata.Name)
+		newSvc.Metadata.UpdatedAt = now
+		//http.Error(res, err.Error(), http.StatusInternalServerError)
+		//return
+	} else {
+		newSvc.Metadata.CreatedAt = now
+		newSvc.Metadata.UpdatedAt = now
 	}
-	now := time.Now()
-	newSvc.Metadata.CreatedAt = now
-	newSvc.Metadata.UpdatedAt = now
 	services[newSvc.Metadata.Name] = newSvc
 	location := "http://" + req.Host + "/ingress"
 	res.Header().Add("Location", location)
 	//res.WriteHeader(http.StatusNoContent)
-	res.WriteHeader(http.StatusCreated)
+	if !present {
+		res.WriteHeader(http.StatusCreated)
+	}
 
 }
 

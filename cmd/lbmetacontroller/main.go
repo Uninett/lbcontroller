@@ -29,6 +29,10 @@ var (
 	cluster    string
 )
 
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
 func main() {
 	lbendpoint = os.Getenv("lbcontroller_ENDPOINT")
 	if lbendpoint == "" {
@@ -66,23 +70,13 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 	response.Attachments = make([]netv1.NetworkPolicy, 0, 1)
 
 	if request.Service.Spec.Type != v1.ServiceTypeLoadBalancer {
-		fmt.Println("not a loadbalancer service")
+		log.Println("not a loadbalancer service")
 		//TODO (gta) empty response? YES!
 		return response, nil
 	}
 
-	//TCP or UDP?
-	var (
-		svcProto = v1.ProtocolTCP //default
-		svcPorts = []int32{}
-	)
-
-	for _, p := range request.Service.Spec.Ports {
-		if p.Protocol == v1.ProtocolUDP {
-			svcProto = v1.ProtocolUDP
-		}
-		svcPorts = append(svcPorts, p.Port)
-	}
+	//get protocol and ports from k8s service
+	svcPorts, svcProto := getPortsProto(request.Service)
 
 	var (
 		namespace   = request.Service.Namespace
@@ -90,48 +84,16 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 	)
 	serviceLbKey := strings.Join([]string{cluster, namespace, serviceName, string(svcProto)}, "-")
 
-	//find the status of the load balancer
-	log.Printf("finding status of laod balancer for service %s...\n", request.Service.Name)
-	lbService, found, err := lbcontroller.GetService(serviceLbKey, lbendpoint)
-	if err != nil {
-		return response, errors.Wrapf(err, "ERROR deleting service with key %s\n", serviceLbKey)
-	}
-	if found {
-		log.Printf("...service %s present", serviceLbKey)
-		//Check if the two versions are different, if not do nothing.
-		//If they are different maybe betteto delete and recreate LB service.
-		//TODO synch the load balancer and the service
-		log.Println("TODO: check differences between load balancer and the service")
-		log.Println("TODO: synch the load balancer and the service")
-		log.Println("TODO: for now we just return the same service/config")
-		//Empty response destroys the network policy and deletes the
-		//annotations. And each service createdn triggers more than one
-		//sync, so we need to return the same.
-		for _, apiVersion := range request.Attachments {
-			for _, netpol := range apiVersion {
-				log.Println("############################################")
-				log.Printf("foud request.Attachment %s-%s\n", apiVersion, netpol)
-				log.Println("############################################")
-				response.Attachments = append(response.Attachments, netpol)
-			}
-		}
-		response.Annotations = request.Service.Annotations
-		response.Labels = request.Service.Labels
+	log.Println("sync load balancer service")
 
-		return response, nil
+	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
 
-	}
-
-	log.Println("...not found, add load balancer service")
-
-	lbService = newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
-
-	ingress, err := lbcontroller.NewService(lbService, lbendpoint)
+	ingress, err := lbcontroller.SyncService(lbService, lbendpoint)
 	if err != nil {
 		return response, errors.Wrap(err, "Could not create load balancer service")
 	}
 
-	log.Printf("Created loab balancer with ingress: %v\n", ingress)
+	log.Printf("Created/updated load balancer with ingress: %v\n", ingress)
 
 	//TODO this annotation might be not optimal
 	for _, in := range ingress {
@@ -152,52 +114,32 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 func syncHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	request := &SyncRequest{}
 	if err := json.Unmarshal(body, request); err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	response, err := sync(request)
 	if err != nil {
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	body, err = json.Marshal(&response)
-	fmt.Println(string(body))
+	//log.Println(string(body))
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(body)
 }
-
-// // RawMessage is a raw encoded JSON value.
-// // It implements Marshaler and Unmarshaler and can
-// // be used to delay JSON decoding or precompute a JSON encoding.
-// type RawMessage []byte
-
-// // MarshalJSON returns m as the JSON encoding of m.
-// func (m RawMessage) MarshalJSON() ([]byte, error) {
-// 	if m == nil {
-// 		return []byte("null"), nil
-// 	}
-// 	return m, nil
-// }
-
-// // UnmarshalJSON sets *m to a copy of data.
-// func (m *RawMessage) UnmarshalJSON(data []byte) error {
-// 	if m == nil {
-// 		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
-// 	}
-// 	*m = append((*m)[0:0], data...)
-// 	return nil
-// }
 
 func syncLoadBalancerService(v1.Service, lbcontroller.Service) error {
 	log.Printf("TODO syncLoadBalancerService")
@@ -227,7 +169,7 @@ func newlbcontrollerService(ks v1.Service, key, protocol string) lbcontroller.Se
 		Method:           "least_conn",
 		UpstreamMaxConns: 100,
 	}
-	cfg.Backends = backends
+	cfg.Backends = backends //TODO this is hardcoded for now
 	if len(ks.Spec.LoadBalancerSourceRanges) != 0 {
 		cfg.ACL = ks.Spec.LoadBalancerSourceRanges
 	}
@@ -292,7 +234,14 @@ func newNetworkPolicy(ksvc v1.Service, ingress []v1.LoadBalancerIngress, proto v
 					From:  netPolPeers,
 				},
 			},
-			//Egress:      {},
+			//TODO here we assume egress to the same peers and ports,
+			//this assumption might not hold
+			Egress: []netv1.NetworkPolicyEgressRule{
+				{
+					Ports: netPolPorts,
+					To:    netPolPeers,
+				},
+			},
 		},
 	}
 	return netpol
