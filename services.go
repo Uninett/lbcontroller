@@ -107,9 +107,19 @@ func SyncService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 	}
 	buf := bytes.NewBuffer(data)
 
-	res, err := http.Post(url, jsonContent, buf)
+	req, err := http.NewRequest(http.MethodPut, url+"/"+svc.Metadata.Name, buf)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating new service")
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+	req.Header.Set("Content-Type", jsonContent)
+
+	// res, err := http.Post(url, jsonContent, buf)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "error creating new service")
+	// }
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error sync-ing Service %s", svc.Metadata.Name)
 	}
 
 	defer res.Body.Close()
@@ -141,53 +151,6 @@ func SyncService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding Service object")
 	}
-	return ret, nil
-}
-
-//ReconfigService replace and exixting Service object, the new Service is retured.
-func ReconfigService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
-	url = svcURL(url)
-
-	req, err := prepareRequest(svc, url+"/"+svc.Metadata.Name, "PATCH")
-	if err != nil {
-		return nil, errors.Wrap(err, "error creatign http.Request")
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reconfiguring Service %s", svc.Metadata.Name)
-	}
-
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading from API endpoint: %s", url)
-	}
-
-	var ret []v1.LoadBalancerIngress
-
-	switch res.StatusCode {
-
-	case http.StatusCreated:
-		err = json.Unmarshal(body, &ret)
-		if err != nil {
-			return nil, errors.Wrap(err, "error decoding LoadBalancerIngress object")
-		}
-
-	case http.StatusNoContent:
-		location := res.Header.Get("Location")
-		if location != "" {
-			ret, err = getIngress(location)
-			if err != nil {
-				return nil, errors.Wrapf(err, "error getting ingress form api: %s", location)
-			}
-			return ret, nil
-		}
-
-	default:
-		return nil, errors.Errorf("API endpoint returned status %s, %s", res.Status, bytes.TrimSpace(body))
-	}
-
 	return ret, nil
 }
 

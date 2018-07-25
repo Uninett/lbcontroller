@@ -126,7 +126,7 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := sync(request)
 	if err != nil {
-		log.Println(err)
+		log.Printf("%v\n", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
