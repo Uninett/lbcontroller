@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/UNINETT/lbcontroller"
 	"github.com/pkg/errors"
-	"github.com/uninett/lbcontroller"
 	"github.com/urfave/cli"
 )
 

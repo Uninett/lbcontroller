@@ -6,9 +6,9 @@ import (
 
 	"text/tabwriter"
 
+	"github.com/UNINETT/lbcontroller"
 	"github.com/koki/json"
 	"github.com/pkg/errors"
-	"github.com/uninett/lbcontroller"
 	"github.com/urfave/cli"
 )
 

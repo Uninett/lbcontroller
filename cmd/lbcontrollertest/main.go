@@ -9,10 +9,10 @@ import (
 
 	"github.com/koki/json"
 
+	"github.com/UNINETT/lbcontroller"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/uninett/lbcontroller"
 )
 
 var (
