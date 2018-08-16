@@ -32,11 +32,8 @@ package main
 import (
 	"log"
 	"os"
-<<<<<<< HEAD:cmd/lbcontrollerctl/main.go
-=======
 
 	"github.com/urfave/cli"
->>>>>>> metacontroller:cmd/lbcontrollerctl/main.go
 )
 
 var (
