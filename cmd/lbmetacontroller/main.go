@@ -71,11 +71,13 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 
 	if request.Service.Spec.Type != v1.ServiceTypeLoadBalancer {
 		log.Println("not a loadbalancer service")
-		//TODO (gta) empty response? YES!
+		//TODO (gta) empty response? keep labels and annotations!
 		return response, nil
 	}
 
 	//get protocol and ports from k8s service
+	//TODO(gta)log that we cannot support mutliple protocols services.
+	//And do nothing as earlier for non loadbalancer services.
 	svcPorts, svcProto := getPortsProto(request.Service)
 
 	var (

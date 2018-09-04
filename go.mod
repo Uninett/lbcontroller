@@ -19,7 +19,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.1 // indirect
 	github.com/stretchr/testify v1.2.2 // indirect
-	github.com/uninett/lbcontroller v0.0.0-20180618124156-35a90d6fa95f
 	github.com/urfave/cli v1.20.0
 	golang.org/x/net v0.0.0-20180629035331-4cb1c02c05b0 // indirect
 	golang.org/x/text v0.3.0 // indirect
