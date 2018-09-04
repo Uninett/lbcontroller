@@ -1,4 +1,3 @@
-vendor/
-lbmetacontroller
-lbcontrollerctl
-lbcontrollertest
+cmd/lbmetacontroller/lbmetacontroller
+cmd/lbcontrollerctl/lbcontrollerctl
+cmd/lbcontrollertest/lbcontrollertest
