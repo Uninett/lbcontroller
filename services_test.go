@@ -8,7 +8,7 @@ import (
 	"github.com/koki/json"
 )
 
-var TestServiceString string = `{
+var TestServiceString = `{
 	"type": "tcp",
 	"metadata": {
 		"name": "testservice"
