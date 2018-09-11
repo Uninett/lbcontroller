@@ -1,0 +1,18 @@
+apiVersion: metacontroller.k8s.io/v1alpha1
+kind: DecoratorController
+metadata:
+  name: lb-controller
+spec:
+  resources:
+  - apiVersion: v1
+    resource: services
+  attachments:
+  - apiVersion: networking.k8s.io/v1
+    resource: networkpolicies
+    updateStrategy:
+      method: InPlace
+  hooks:
+    sync:
+      webhook:
+        url: http://lb-hook.default/sync
+

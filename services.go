@@ -1,7 +1,9 @@
-package lbcontroller
+package main
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -15,17 +17,22 @@ type Service struct {
 	Type     ServiceType              `json:"type,omitempty"`
 	Metadata Metadata                 `json:"metadata,omitempty"`
 	Config   Config                   `json:"config,omitempty"`
-	Ingress  []v1.LoadBalancerIngress `json:"ingress,omitempty"`
+	Ingress  []v1.LoadBalancerIngress `json:"ingress,omitempty"` //TODO(gta) make our own type and remove dependancy from k8s?
+
 }
 
 //ListServices return a list of services
-//configured on the loadbalancers. Thee services
-//are returned as Messages, with the actual configurartion
-//still in json format.
-func ListServices(url string) ([]Service, error) {
+//configured on the loadbalancers.
+//A token is needed to authenticate
+func ListServices(url, token string) ([]Service, error) {
 	url = svcURL(url)
 
-	res, err := http.Get(url)
+	req, err := newRequest(http.MethodGet, url, token, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creatign http.Request")
+	}
+	res, err := http.DefaultClient.Do(req)
+	//res, err := http.Get(url)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error connecting to API endpoint: %s", url)
 	}
@@ -54,12 +61,18 @@ func ListServices(url string) ([]Service, error) {
 
 //GetService get the configuration of the fronten specified by name, if the service
 //is found GetService returnns a true boolean value as well
-func GetService(name, url string) (Service, bool, error) {
+//A token is needed to authenticate
+func GetService(name, url, token string) (Service, bool, error) {
 
 	url = svcURL(url)
 	ret := Service{}
 
-	res, err := http.Get(url + "/" + name)
+	req, err := newRequest(http.MethodGet, url+"/"+name, token, nil)
+	if err != nil {
+		return ret, false, errors.Wrapf(err, "error creating http request")
+	}
+	res, err := http.DefaultClient.Do(req)
+	//res, err := http.Get(url + "/" + name)
 	if err != nil {
 		return ret, false, errors.Wrapf(err, "error connecting to API endpoint: %s", url)
 	}
@@ -98,7 +111,8 @@ func GetService(name, url string) (Service, bool, error) {
 }
 
 //SyncService create or updates a new service
-func SyncService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
+//A token is needed to authenticate
+func SyncService(svc Service, url, token string) ([]v1.LoadBalancerIngress, error) {
 
 	url = svcURL(url)
 	data, err := json.Marshal(svc)
@@ -107,16 +121,10 @@ func SyncService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 	}
 	buf := bytes.NewBuffer(data)
 
-	req, err := http.NewRequest(http.MethodPut, url+"/"+svc.Metadata.Name, buf)
+	req, err := newRequest(http.MethodPut, url+"/"+svc.Metadata.Name, token, buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creatign http.Request")
 	}
-	req.Header.Set("Content-Type", jsonContent)
-
-	// res, err := http.Post(url, jsonContent, buf)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "error creating new service")
-	// }
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error sync-ing Service %s", svc.Metadata.Name)
@@ -155,10 +163,11 @@ func SyncService(svc Service, url string) ([]v1.LoadBalancerIngress, error) {
 }
 
 //DeleteService deletes and exixting Service object, the new Service is retured.
-func DeleteService(name, url string) error {
+//A token is needed to authenticate
+func DeleteService(name, url, token string) error {
 	url = svcURL(url)
 
-	req, err := http.NewRequest("DELETE", url+"/"+name, nil)
+	req, err := newRequest(http.MethodDelete, url+"/"+name, token, nil)
 	if err != nil {
 		return errors.Wrap(err, "error creatign http.Request")
 	}
@@ -212,4 +221,14 @@ func getIngress(url string) ([]v1.LoadBalancerIngress, error) {
 	}
 
 	return ret, nil
+}
+
+func newRequest(method, endpoint, token string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+	return req, nil
 }

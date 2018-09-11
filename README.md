@@ -14,6 +14,8 @@ A biref panoramic of the content:
 
 Install go 1.11.
 
+*This project is developed with go 1.11 and [modules](https://github.com/golang/go/wiki/Modules), to compile clone this repo outside the GOPATH or set GO111MODULE=on.*
+
 Install docker and minikube.
 
 Run minikube.
@@ -51,6 +53,14 @@ Pretty much the same as before just do not export `GOOS=linux`, or do it is alre
 ## Notes
 
 The yaml files in cmd/{lbmetaontroller, lbcontrollertest} have `imagePullPolicy: Never`, this is because if reuse the Docker daemon in minikube without a registry teh images are already there and cannot be pulled. If you want to use a different setup you might want to changhe the pull policy.
+
+There are three envroment variables used: lbcontroller_ENDPOINT, lbcontroller_TOKEN and lbcontroller_CLUSTER.
+If not defined `lbcontroller_CLUSTER` will default to nird the other two must be defined.
+`lbcontroller_ENDPOINT` is the API endpoint of the load balancer.
+`lbcontroller_TOKEN` is the token to use to authenticate the API.
+
+
+
 
 # TODOs
 

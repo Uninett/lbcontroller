@@ -1,4 +1,4 @@
-package lbcontroller
+package main
 
 import (
 	"bytes"
