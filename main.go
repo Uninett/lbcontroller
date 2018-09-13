@@ -1,6 +1,7 @@
 package main
 
 import (
+	"gopkg.in/alecthomas/kingpin.v2"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -24,9 +25,11 @@ import (
 const defaultCluster = "nird"
 
 var (
-	lbendpoint string
-	cluster    string
-	token      string
+	lbpeersString    = kingpin.Flag("peers", "The load babalancers IPs, comma separated in CIDR form").Required().Envar("LBC_PEERS").String()
+	lbendpoint = kingpin.Flag("endpoint", "The load balancer controller API endpoint").Required().Envar("LBC_ENDPOINT").String()
+	cluster    = kingpin.Flag("clustername", "The name of the Kubernetes cluster").Default("nird").Envar("LBC_CLUSTER_NAME").String()
+	token      = kingpin.Flag("token", "Authentication token to access the load balancer API" ).Required().Envar("LBC_TOKEN").String()
+	lbpeers []string// split strings of lbpeersString
 )
 
 func init() {
@@ -34,19 +37,11 @@ func init() {
 }
 
 func main() {
-	lbendpoint = os.Getenv("lbcontroller_ENDPOINT")
-	if lbendpoint == "" {
-		panic("no load balancer endpoint defined, cannot continue")
-	}
-	lbendpoint = os.Getenv("lbcontroller_TOKEN")
-	if lbendpoint == "" {
-		panic("no API token defined, cannot authenticate")
-	}
-	cluster = os.Getenv("lbcontroller_CLUSTER")
-	if cluster == "" {
-		log.Printf("No clustrer name defined, defalt name is given: %s", defaultCluster)
-		cluster = defaultCluster
-	}
+	kingpin.Parse()
+
+	lbpeers = strings.Split(*lbpeersString, ",")
+
+	
 	router := mux.NewRouter()
 	router.HandleFunc("/sync", syncHandler).Methods("POST")
 	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
@@ -82,19 +77,23 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 	//get protocol and ports from k8s service
 	//TODO(gta)log that we cannot support mutliple protocols services.
 	//And do nothing as earlier for non loadbalancer services.
-	svcPorts, svcProto := getPortsProto(request.Service)
+	svcPorts, svcProto, err  := getPortsProto(request.Service)
+	if err !=nil{
+		log.Println("ERROR: cannot specify both TCP and UDP protocols in the same K8s Service. Create two services.")
+		return response, nil
+	}
 
 	var (
 		namespace   = request.Service.Namespace
 		serviceName = request.Service.Name
 	)
-	serviceLbKey := strings.Join([]string{cluster, namespace, serviceName, string(svcProto)}, "-")
+	serviceLbKey := strings.Join([]string{*cluster, namespace, serviceName, string(svcProto)}, "-")
 
 	log.Println("sync load balancer service")
 
 	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
 
-	ingress, err := SyncService(lbService, lbendpoint, token)
+	ingress, err := SyncService(lbService, *lbendpoint, *token)
 	if err != nil {
 		return response, errors.Wrap(err, "Could not create load balancer service")
 	}
@@ -152,19 +151,28 @@ func syncLoadBalancerService(v1.Service, Service) error {
 	return nil
 }
 
-func getPortsProto(service v1.Service) ([]int32, v1.Protocol) {
+//TODO(gta) if there are both tcp and udp specified log an error and do nothing.
+func getPortsProto(service v1.Service) ([]int32, v1.Protocol, error) {
 	var (
 		svcProto = v1.ProtocolTCP //default
 		svcPorts = []int32{}
+		tcpProto, udpProto bool
 	)
-
+	
 	for _, p := range service.Spec.Ports {
 		if p.Protocol == v1.ProtocolUDP {
+			udpProto = true
 			svcProto = v1.ProtocolUDP
+		}
+		if p.Protocol == v1.ProtocolTCP{
+			tcpProto = true
 		}
 		svcPorts = append(svcPorts, p.Port)
 	}
-	return svcPorts, svcProto
+	if tcpProto && udpProto{//too many protocols
+		return nil, "", errors.New("both TCP and UDP specified in service")
+	}
+	return svcPorts, svcProto, nil
 }
 
 func newlbcontrollerService(ks v1.Service, key, protocol string) Service {
@@ -211,10 +219,10 @@ func newNetworkPolicy(ksvc v1.Service, ingress []v1.LoadBalancerIngress, proto v
 	}
 
 	netPolPeers := []netv1.NetworkPolicyPeer{}
-	for _, in := range ingress {
+	for _, peer := range lbpeers {
 		netin := netv1.NetworkPolicyPeer{
 			IPBlock: &netv1.IPBlock{
-				CIDR: in.IP + "/32", // TODO is this OK
+				CIDR: peer,
 			},
 		}
 		netPolPeers = append(netPolPeers, netin)
@@ -231,21 +239,12 @@ func newNetworkPolicy(ksvc v1.Service, ingress []v1.LoadBalancerIngress, proto v
 		Spec: netv1.NetworkPolicySpec{
 			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress},
 			PodSelector: metav1.LabelSelector{
-				//TODO same as the service?
 				MatchLabels: ksvc.Spec.Selector,
 			},
 			Ingress: []netv1.NetworkPolicyIngressRule{
 				{
 					Ports: netPolPorts,
 					From:  netPolPeers,
-				},
-			},
-			//TODO here we assume egress to the same peers and ports,
-			//this assumption might not hold
-			Egress: []netv1.NetworkPolicyEgressRule{
-				{
-					Ports: netPolPorts,
-					To:    netPolPeers,
 				},
 			},
 		},
