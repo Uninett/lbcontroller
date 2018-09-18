@@ -1,5 +1,7 @@
-FROM scratch
+FROM alpine:3.8
 
-COPY  lbmetacontroller .
+RUN apk update && apk add ca-certificates
 
-ENTRYPOINT [ "/lbmetacontroller" ]
+COPY  lbcontroller .
+
+ENTRYPOINT [ "/lbcontroller" ]
