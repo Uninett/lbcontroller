@@ -1,9 +1,9 @@
 package main
 
 import (
-	"gopkg.in/alecthomas/kingpin.v2"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -25,14 +25,15 @@ import (
 const defaultCluster = "nird"
 
 var (
-	lbpeersString    = kingpin.Flag("peers", "The load babalancers IPs, comma separated in CIDR form").Required().Envar("LBC_PEERS").String()
-	lbendpoint = kingpin.Flag("endpoint", "The load balancer controller API endpoint").Required().Envar("LBC_ENDPOINT").String()
-	cluster    = kingpin.Flag("clustername", "The name of the Kubernetes cluster").Default("nird").Envar("LBC_CLUSTER_NAME").String()
-	token      = kingpin.Flag("token", "Authentication token to access the load balancer API" ).Required().Envar("LBC_TOKEN").String()
-	lbpeers []string// split strings of lbpeersString
+	lbpeersString = kingpin.Flag("peers", "The load babalancers IPs, comma separated in CIDR form").Required().Envar("LBC_PEERS").String()
+	lbendpoint    = kingpin.Flag("endpoint", "The load balancer controller API endpoint").Required().Envar("LBC_ENDPOINT").String()
+	cluster       = kingpin.Flag("clustername", "The name of the Kubernetes cluster").Default("nird").Envar("LBC_CLUSTER_NAME").String()
+	token         = kingpin.Flag("token", "Authentication token to access the load balancer API").Required().Envar("LBC_TOKEN").String()
+	lbpeers       []string // split strings of lbpeersString
 )
 
 func init() {
+	//	fmt.Printf("%#v\n", os.Environ())
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
@@ -41,7 +42,6 @@ func main() {
 
 	lbpeers = strings.Split(*lbpeersString, ",")
 
-	
 	router := mux.NewRouter()
 	router.HandleFunc("/sync", syncHandler).Methods("POST")
 	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
@@ -77,8 +77,9 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 	//get protocol and ports from k8s service
 	//TODO(gta)log that we cannot support mutliple protocols services.
 	//And do nothing as earlier for non loadbalancer services.
-	svcPorts, svcProto, err  := getPortsProto(request.Service)
-	if err !=nil{
+	svcPorts, svcProto, err := getPortsProto(request.Service)
+	protoString := strings.ToLower(string(svcProto))
+	if err != nil {
 		log.Println("ERROR: cannot specify both TCP and UDP protocols in the same K8s Service. Create two services.")
 		return response, nil
 	}
@@ -87,11 +88,12 @@ func sync(request *SyncRequest) (*SyncResponse, error) {
 		namespace   = request.Service.Namespace
 		serviceName = request.Service.Name
 	)
-	serviceLbKey := strings.Join([]string{*cluster, namespace, serviceName, string(svcProto)}, "-")
+	//serviceLbKey := strings.Join([]string{*cluster, namespace, serviceName, protoString}, "-")
+	serviceLbKey := strings.Join([]string{*cluster, namespace, serviceName, protoString}, "")
 
 	log.Println("sync load balancer service")
 
-	lbService := newlbcontrollerService(request.Service, serviceLbKey, string(svcProto))
+	lbService := newlbcontrollerService(request.Service, serviceLbKey, protoString)
 
 	ingress, err := SyncService(lbService, *lbendpoint, *token)
 	if err != nil {
@@ -154,22 +156,22 @@ func syncLoadBalancerService(v1.Service, Service) error {
 //TODO(gta) if there are both tcp and udp specified log an error and do nothing.
 func getPortsProto(service v1.Service) ([]int32, v1.Protocol, error) {
 	var (
-		svcProto = v1.ProtocolTCP //default
-		svcPorts = []int32{}
+		svcProto           = v1.ProtocolTCP //default
+		svcPorts           = []int32{}
 		tcpProto, udpProto bool
 	)
-	
+
 	for _, p := range service.Spec.Ports {
 		if p.Protocol == v1.ProtocolUDP {
 			udpProto = true
 			svcProto = v1.ProtocolUDP
 		}
-		if p.Protocol == v1.ProtocolTCP{
+		if p.Protocol == v1.ProtocolTCP {
 			tcpProto = true
 		}
 		svcPorts = append(svcPorts, p.Port)
 	}
-	if tcpProto && udpProto{//too many protocols
+	if tcpProto && udpProto { //too many protocols
 		return nil, "", errors.New("both TCP and UDP specified in service")
 	}
 	return svcPorts, svcProto, nil
@@ -177,7 +179,7 @@ func getPortsProto(service v1.Service) ([]int32, v1.Protocol, error) {
 
 func newlbcontrollerService(ks v1.Service, key, protocol string) Service {
 	svc := Service{}
-	svc.Type = ServiceType(strings.ToLower(protocol))
+	svc.Type = ServiceType(protocol)
 	svc.Metadata.Name = key
 	cfg := Config{
 		Method:           "least_conn",

@@ -4,8 +4,6 @@ metadata:
   name: nginx
   labels:
     app: nginx
-  annotations:
-    testing.com/here: true
 spec:
   ports:
   - port: 80

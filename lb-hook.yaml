@@ -9,10 +9,15 @@ spec:
   containers:
   - name: lb-hook
     image: lb-hook:latest
+    # args: ["--endpoint", "https://lbapi-staging.paas2.uninett.no/"]
     imagePullPolicy: Never
     env:
-    - name: lbcontroller_ENDPOINT
-      value: "http://lb-api-test"
+    - name: LBC_ENDPOINT
+      value: "https://lbapi-staging.paas2.uninett.no/"
+    - name: LBC_PEERS
+      value: "127.0.0.1,0.0.0.0"
+    - name: LBC_TOKEN
+      value: "mysecrettoken1234567890123456789"
 
 ---
 apiVersion: v1
