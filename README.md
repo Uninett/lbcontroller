@@ -1,4 +1,6 @@
 
+*Note: Repo not in use, moved to Uninett SCM.*
+
 # lbcontroller (WIP)
 
 lbcontroller uses Kubernetes [metacontroller](https://metacontroller.app/) to automatically configure the Uninett loadbalancers.
